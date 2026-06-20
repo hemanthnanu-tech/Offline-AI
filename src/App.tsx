@@ -5,7 +5,6 @@ import SettingsModal from './components/SettingsModal';
 import LibraryModal from './components/LibraryModal';
 import { ChatSession, ChatMessage, InferenceSettings, GGUFModelInfo } from './types';
 import { Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff, Loader2, Globe, DownloadCloud, ChevronDown, ChevronUp, Square, Cpu, HardDrive } from 'lucide-react';
-import * as webllm from '@mlc-ai/web-llm';
 
 export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -755,18 +754,7 @@ export default function App() {
         }}
       />
 
-      {/* Background Download Toast */}
-      {webLlmDownloading && !showDemoPopup && (
-        <div className="fixed top-4 right-4 z-[90] bg-[var(--bg-main)] border border-[var(--border-color)] shadow-xl rounded-xl p-3.5 flex items-center gap-3.5 animate-in slide-in-from-right max-w-sm">
-          <div className="bg-indigo-500/10 p-2 rounded-lg">
-            <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-          </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-[13px] font-bold text-[var(--text-main)]">Downloading Model</span>
-            <span className="text-[11px] text-[var(--text-muted)] w-full truncate">{webLlmProgress || 'Initializing...'}</span>
-          </div>
-        </div>
-      )}
+
 
       {/* Demo UI Preview Modal */}
       {showDemoPopup && (
