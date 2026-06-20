@@ -73,5 +73,7 @@ export interface InferenceSettings {
   userName: string;
   userDob: string;
   userDetails: string;
+  geminiApiKey: string;
+  useGPU: boolean;
 }
 

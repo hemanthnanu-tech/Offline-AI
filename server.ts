@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { getLlama, LlamaChatSession } from "node-llama-cpp";
+import os from "os";
 
 // Load environment variables
 dotenv.config();
@@ -20,7 +21,7 @@ async function startServer() {
   let context: any = null;
   let detectedModelInfo: any = null;
   
-  async function loadGgufModel(specificFileName?: string) {
+  async function loadGgufModel(specificFileName?: string, useGPU: boolean = true) {
     // Clean up previous instances
     if (context) {
       try {
@@ -46,9 +47,16 @@ async function startServer() {
         
         console.log(`Found GGUF model: ${ggufFile} (${sizeGB} GB). Loading into memory...`);
         const llama = await getLlama();
-        model = await llama.loadModel({
-          modelPath
-        });
+        
+        const loadParams: any = { modelPath };
+        if (!useGPU) {
+          loadParams.gpuLayers = 0;
+          console.log('CPU Mode explicitly requested. GPU layers set to 0.');
+        } else {
+          console.log('GPU Mode enabled (default).');
+        }
+
+        model = await llama.loadModel(loadParams);
         context = await model.createContext();
         
         // Extract properties dynamically
@@ -113,12 +121,46 @@ async function startServer() {
 
   app.post("/api/reload", async (req, res) => {
     console.log("Reloading GGUF model by user request...");
-    const success = await loadGgufModel();
+    const { useGPU } = req.body || {};
+    const success = await loadGgufModel(undefined, useGPU !== false);
     res.json({
       success,
       modelLoaded: !!model,
       modelInfo: detectedModelInfo
     });
+  });
+
+  app.get("/api/system-stats", (req, res) => {
+    const totalRam = os.totalmem();
+    const freeRam = os.freemem();
+    const cpus = os.cpus();
+    // simple CPU load estimation from os.loadavg (1m) on unix, or fake it on windows
+    const cpuLoad = os.loadavg()[0] || 0; 
+    
+    // Convert to GB strings
+    const totalGB = (totalRam / (1024 ** 3)).toFixed(1);
+    const freeGB = (freeRam / (1024 ** 3)).toFixed(1);
+    
+    // Create percentage string for CPU
+    const cpuPerc = Math.min(100, Math.round(cpuLoad * 100 / cpus.length)) + "%";
+
+    res.json({
+      cpu: cpuPerc,
+      freeRam: `${freeGB}GB`,
+      totalRam: `${totalGB}GB`
+    });
+  });
+
+  app.post("/api/unload", async (req, res) => {
+    console.log("Unloading model to free RAM...");
+    if (context) {
+      try { await context.dispose(); } catch(e) {}
+      context = null;
+    }
+    model = null;
+    detectedModelInfo = null;
+    if (global.gc) global.gc();
+    res.json({ success: true });
   });
 
   app.post("/api/chat", async (req, res) => {

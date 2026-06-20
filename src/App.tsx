@@ -4,7 +4,7 @@ import ChatContainer from './components/ChatContainer';
 import SettingsModal from './components/SettingsModal';
 import LibraryModal from './components/LibraryModal';
 import { ChatSession, ChatMessage, InferenceSettings, GGUFModelInfo } from './types';
-import { Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff, Loader2, Globe, DownloadCloud, ChevronDown, ChevronUp, Square } from 'lucide-react';
+import { Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff, Loader2, Globe, DownloadCloud, ChevronDown, ChevronUp, Square, Cpu, HardDrive } from 'lucide-react';
 import * as webllm from '@mlc-ai/web-llm';
 
 export default function App() {
@@ -59,13 +59,29 @@ export default function App() {
   const isGithubPages = window.location.hostname === 'hemanthnanu-tech.github.io';
   const [showDemoPopup, setShowDemoPopup] = useState(isGithubPages);
 
-  // WebLLM State
-  const [isWebLLMMode, setIsWebLLMMode] = useState(isGithubPages);
-  const [webLlmEngine, setWebLlmEngine] = useState<webllm.MLCEngine | null>(null);
-  const [webLlmProgress, setWebLlmProgress] = useState<string>('');
-  const [webLlmReady, setWebLlmReady] = useState(false);
-  const [webLlmDownloading, setWebLlmDownloading] = useState(false);
-  const [showDownloadDetails, setShowDownloadDetails] = useState(false);
+  // Hardware Monitoring State
+  const [hardwareStats, setHardwareStats] = useState<{ cpu: string, freeRam: string, totalRam: string } | null>(null);
+
+  // Poll hardware stats if running locally
+  useEffect(() => {
+    if (isGithubPages) return;
+    
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('/api/system-stats');
+        if (res.ok) {
+          const data = await res.json();
+          setHardwareStats(data);
+        }
+      } catch (e) {
+        // silently fail
+      }
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 3000);
+    return () => clearInterval(interval);
+  }, [isGithubPages]);
 
   // Sync settings to localStorage
   useEffect(() => {
@@ -345,50 +361,81 @@ export default function App() {
     }
 
     try {
-      if (isWebLLMMode && webLlmReady && webLlmEngine) {
-        // WebLLM Inference Route
+      if (isGithubPages) {
+        // Browser/GitHub Mode: Use Gemini API directly if key is provided
+        if (!settings.geminiApiKey) {
+          throw new Error("No Gemini API Key provided. Please enter one in Settings to chat in Web Demo mode.");
+        }
+
         const startTime = Date.now();
-        let tokenCount = 0;
         let fullContent = "";
 
-        // Format history for WebLLM
-        const chatCompletionMessages: webllm.ChatCompletionMessageParam[] = [
-          { role: 'system', content: finalSystemPrompt },
-          ...updatedMessages.map(msg => ({
-            role: msg.role === 'assistant' ? 'assistant' as const : 'user' as const,
-            content: msg.content
-          }))
-        ];
+        // Format history for Gemini
+        const contents = updatedMessages.map(msg => ({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }]
+        }));
 
-        const asyncChunkGenerator = await webLlmEngine.chat.completions.create({
-          stream: true,
-          messages: chatCompletionMessages,
-          temperature: settings.temperature,
-          top_p: settings.topP,
-          max_tokens: settings.maxTokens
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${settings.geminiApiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: finalSystemPrompt }] },
+            contents,
+            generationConfig: {
+              temperature: settings.temperature,
+              topP: settings.topP,
+              maxOutputTokens: settings.maxTokens
+            }
+          }),
+          signal: controller.signal
         });
 
-        for await (const chunk of asyncChunkGenerator) {
-          if (controller.signal.aborted) break;
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error?.message || "Gemini API Error. Check your API key.");
+        }
+
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let tokenCount = 0;
+
+        while (reader) {
+          const { done, value } = await reader.read();
+          if (done) break;
           
-          const delta = chunk.choices[0]?.delta?.content || "";
-          if (delta) {
-            fullContent += delta;
-            tokenCount++;
-            const timeElapsed = (Date.now() - startTime) / 1000;
-            const tps = timeElapsed > 0 ? tokenCount / timeElapsed : 0;
-            
-            setSessions(prev => prev.map(s => {
-              if (s.id === activeSessionId) {
-                const msgs = [...s.messages];
-                const targetIdx = msgs.findIndex(m => m.id === responseId);
-                if (targetIdx !== -1) {
-                  msgs[targetIdx] = { ...msgs[targetIdx], content: fullContent, tokensPerSecond: parseFloat(tps.toFixed(2)) };
+          const chunkStr = decoder.decode(value, { stream: true });
+          const lines = chunkStr.split("\n");
+          
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith("data: ") && trimmedLine !== "data: [DONE]") {
+              try {
+                const data = JSON.parse(trimmedLine.substring(6));
+                const textChunk = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                if (textChunk) {
+                  fullContent += textChunk;
+                  tokenCount++;
+                  
+                  const timeElapsed = (Date.now() - startTime) / 1000;
+                  const tps = timeElapsed > 0 ? tokenCount / timeElapsed : 0;
+                  
+                  setSessions(prev => prev.map(s => {
+                    if (s.id === activeSessionId) {
+                      const msgs = [...s.messages];
+                      const targetIdx = msgs.findIndex(m => m.id === responseId);
+                      if (targetIdx !== -1) {
+                        msgs[targetIdx] = { ...msgs[targetIdx], content: fullContent, tokensPerSecond: parseFloat(tps.toFixed(2)) };
+                      }
+                      return { ...s, messages: msgs };
+                    }
+                    return s;
+                  }));
                 }
-                return { ...s, messages: msgs };
+              } catch (e) {
+                // Ignore split chunks
               }
-              return s;
-            }));
+            }
           }
         }
       } else {
@@ -649,6 +696,39 @@ export default function App() {
               availableModels={availableModels}
               onLoadModel={handleLoadModel}
             />
+
+            {/* Hardware Monitor Floating Widget */}
+            <div className="absolute top-4 right-4 flex items-center gap-2">
+              <div className="bg-[var(--bg-main)] border border-[var(--border-color)] rounded-xl shadow-sm px-3 py-1.5 flex items-center gap-3 text-[11px] font-mono text-[var(--text-main)]">
+                <div className="flex items-center gap-1.5" title="CPU Load">
+                  <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>{hardwareStats?.cpu || '0%'}</span>
+                </div>
+                <div className="w-[1px] h-3 bg-[var(--border-color)]" />
+                <div className="flex items-center gap-1.5" title="Free RAM">
+                  <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{hardwareStats?.freeRam ? `${hardwareStats.freeRam} Free` : 'N/A'}</span>
+                </div>
+              </div>
+              
+              {!isGithubPages && (
+                <button
+                  onClick={async () => {
+                    try {
+                      await fetch('/api/unload', { method: 'POST' });
+                      alert('Memory cleaned and model unloaded.');
+                      window.location.reload();
+                    } catch (e) {
+                      console.error(e);
+                    }
+                  }}
+                  className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-xl px-3 py-1.5 text-[11px] font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  title="Unload Model and Clean RAM"
+                >
+                  <Square className="w-3 h-3 fill-current" /> Clean RAM
+                </button>
+              )}
+            </div>
           </div>
 
 
@@ -696,103 +776,37 @@ export default function App() {
               <div className="w-14 h-14 rounded-full bg-[var(--bg-main)] shadow-md flex items-center justify-center mx-auto mb-4 border border-[var(--border-color)]">
                 <Globe className="w-7 h-7 text-indigo-500" />
               </div>
-              <h2 className="text-2xl font-bold tracking-tight text-[var(--text-main)]" style={{ fontFamily: "'Inter', sans-serif" }}>WebGPU Live Demo</h2>
+              <h2 className="text-2xl font-bold tracking-tight text-[var(--text-main)]" style={{ fontFamily: "'Inter', sans-serif" }}>Live Web Demo</h2>
               <p className="text-[var(--text-muted)] text-[13px] mt-2">
-                Running directly in your browser. No installation required.
+                Running in your browser. No installation required.
               </p>
             </div>
             
             <div className="p-6 space-y-5">
-              {!webLlmDownloading ? (
-                <>
-                  <div className="bg-[var(--bg-hover)]/60 p-4 rounded-xl text-sm leading-relaxed text-[var(--text-secondary)] border border-[var(--border-color)]">
-                    To enable chat on this GitHub Pages demo, your browser needs to download a <strong>2GB language model</strong> (Phi-3.5) into its secure cache. This uses your local GPU for 100% private inference.
-                  </div>
-                  <div className="flex flex-col gap-2.5">
-                    <button
-                      onClick={async () => {
-                        setWebLlmDownloading(true);
-                        try {
-                          const engine = new webllm.MLCEngine();
-                          engine.setInitProgressCallback((progress) => {
-                            setWebLlmProgress(progress.text);
-                          });
-                          await engine.reload("Phi-3.5-mini-instruct-q4f16_1-MLC");
-                          setWebLlmEngine(engine);
-                          setWebLlmReady(true);
-                          setWebLlmDownloading(false);
-                          setShowDemoPopup(false);
-                          setActiveModel({
-                            id: 'phi3-webgpu',
-                            name: 'Phi-3.5-Mini (WebGPU)',
-                            fileName: 'phi3.5-webgpu',
-                            architecture: 'phi3',
-                            quantization: 'q4f16_1',
-                            sizeBytes: 2000000000,
-                            path: ''
-                          });
-                        } catch (e) {
-                          console.error("Failed to load WebLLM", e);
-                          setWebLlmProgress("Error loading model. Does your browser support WebGPU?");
-                        }
-                      }}
-                      className="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-xl transition shadow-sm hover:shadow-md flex items-center justify-center gap-2"
-                    >
-                      <DownloadCloud className="w-5 h-5" /> Start Download & Load Model
-                    </button>
-                    <button
-                      onClick={() => setShowDemoPopup(false)}
-                      className="w-full py-2.5 bg-transparent hover:bg-[var(--bg-hover)] text-[var(--text-main)] font-medium rounded-xl transition"
-                    >
-                      Just View UI (No Chat)
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-4">
-                  <div className="bg-[var(--bg-hover)]/50 p-6 rounded-xl border border-[var(--border-color)] flex flex-col items-center justify-center text-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-3" />
-                    <p className="text-[var(--text-main)] text-[14px] font-semibold mb-1">Downloading Model Shards...</p>
-                    
-                    <button 
-                      onClick={() => setShowDownloadDetails(!showDownloadDetails)}
-                      className="flex items-center gap-1 mt-1 text-[12px] text-indigo-500 hover:text-indigo-400 transition cursor-pointer"
-                    >
-                      {showDownloadDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                      {showDownloadDetails ? 'Hide details' : 'Show details'}
-                    </button>
-                    
-                    {showDownloadDetails ? (
-                      <div className="mt-3 p-3 bg-black/10 dark:bg-black/40 rounded-lg text-left w-full border border-[var(--border-color)]">
-                        <p className="text-[var(--text-secondary)] text-[11px] font-mono break-all">{webLlmProgress || 'Initializing...'}</p>
-                      </div>
-                    ) : (
-                      <p className="text-[var(--text-muted)] text-[12px] font-medium max-w-[280px] truncate mt-1">{webLlmProgress || 'Initializing...'}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setWebLlmDownloading(false);
-                        if (webLlmEngine) {
-                          webLlmEngine.unload();
-                          setWebLlmEngine(null);
-                        }
-                      }}
-                      className="w-1/3 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-semibold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
-                      title="Pause / Stop Download completely"
-                    >
-                      <Square className="w-3.5 h-3.5 fill-current" /> Stop
-                    </button>
-                    <button
-                      onClick={() => setShowDemoPopup(false)}
-                      className="w-2/3 py-2.5 bg-[var(--bg-hover)] hover:bg-[var(--border-color)] border border-transparent hover:border-[var(--border-color)] text-[var(--text-main)] font-semibold rounded-xl transition cursor-pointer"
-                    >
-                      Run in Background
-                    </button>
-                  </div>
-                </div>
-              )}
+              <div className="bg-[var(--bg-hover)]/60 p-4 rounded-xl text-sm leading-relaxed text-[var(--text-secondary)] border border-[var(--border-color)]">
+                This is a front-end UI showcase. Because running massive AI models in the browser can freeze laptops, we've disabled browser-based downloads.
+                <br/><br/>
+                If you want to chat right now, go to <strong>Settings {'>'} Model Settings</strong> and enter a free <strong>Google Gemini API Key</strong>. 
+                <br/><br/>
+                Otherwise, you can just click around to explore the UI design!
+              </div>
+              <div className="flex flex-col gap-2.5">
+                <button
+                  onClick={() => {
+                    setShowDemoPopup(false);
+                    setIsSettingsOpen(true);
+                  }}
+                  className="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-xl transition shadow-sm hover:shadow-md cursor-pointer"
+                >
+                  Enter API Key in Settings
+                </button>
+                <button
+                  onClick={() => setShowDemoPopup(false)}
+                  className="w-full py-2.5 bg-transparent hover:bg-[var(--bg-hover)] text-[var(--text-main)] font-medium rounded-xl transition cursor-pointer"
+                >
+                  Just View UI (No Chat)
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -36,6 +36,8 @@ export default function SettingsModal({
   const [language, setLanguage] = useState<string>('auto');
   const [enableDictation, setEnableDictation] = useState<boolean>(true);
   const [separateVoice, setSeparateVoice] = useState<boolean>(false);
+  const [geminiApiKey, setGeminiApiKey] = useState<string>('');
+  const [useGPU, setUseGPU] = useState<boolean>(true);
 
   useEffect(() => {
     setLocalSettings({ ...settings });
@@ -46,6 +48,8 @@ export default function SettingsModal({
       setLanguage(settings.language || 'auto');
       setEnableDictation(settings.enableDictation !== false);
       setSeparateVoice(!!settings.separateVoice);
+      setGeminiApiKey(settings.geminiApiKey || '');
+      setUseGPU(settings.useGPU !== false);
     }
   }, [settings, isOpen]);
 
@@ -59,7 +63,9 @@ export default function SettingsModal({
       accentColor: accentColor as any,
       language,
       enableDictation,
-      separateVoice
+      separateVoice,
+      geminiApiKey,
+      useGPU
     });
     onClose();
   };
@@ -67,7 +73,11 @@ export default function SettingsModal({
   const handleReloadModel = async () => {
     setReloadingModel(true);
     try {
-      const res = await fetch('/api/reload', { method: 'POST' });
+      const res = await fetch('/api/reload', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ useGPU })
+      });
       const data = await res.json();
       if (data.success && data.modelInfo) {
         alert(`Success! Loaded GGUF model: ${data.modelInfo.name}`);
@@ -438,21 +448,38 @@ export default function SettingsModal({
                     )}
                   </div>
 
-                  {/* VRAM Allocation option */}
+                  {/* API Key Input */}
+                  <div className="space-y-1.5 py-2 border-b border-[var(--border-color)]">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[14px] font-normal text-[var(--text-main)] block">Google Gemini API Key</span>
+                      <span className="text-[10px] text-[var(--text-muted)] bg-[var(--bg-hover)] px-2 py-0.5 rounded">For Web/GitHub Demo</span>
+                    </div>
+                    <input
+                      type="password"
+                      placeholder="AIzaSy..."
+                      value={geminiApiKey}
+                      onChange={(e) => setGeminiApiKey(e.target.value)}
+                      className="w-full text-[13px] border border-[var(--border-color)] rounded-lg px-3 py-2 bg-transparent outline-none focus:border-[var(--accent-color)] text-[var(--text-main)] transition"
+                    />
+                    <p className="text-[10.5px] text-[var(--text-muted)]">If provided, the app will use Gemini API in the browser instead of downloading a massive local model. Zero local lag.</p>
+                  </div>
+
+                  {/* Backend Execution Toggle */}
                   <div className="flex items-center justify-between py-2 border-b border-[var(--border-color)]">
                     <div className="space-y-0.5">
-                      <span className="text-[14px] font-normal text-[var(--text-main)] block">GPU VRAM offload</span>
-                      <p className="text-[10.5px] text-[var(--text-muted)]">GPU buffer allocation size</p>
+                      <span className="text-[14px] font-normal text-[var(--text-main)] block">Hardware Backend</span>
+                      <p className="text-[10.5px] text-[var(--text-muted)] w-[220px]">
+                        <strong>GPU (Fast):</strong> Requires dedicated graphics card.<br/>
+                        <strong>CPU (Fallback):</strong> Slower, works on any device.
+                      </p>
                     </div>
                     <select
-                      value={localSettings.allocVramMb}
-                      onChange={(e) => setLocalSettings(prev => ({ ...prev, allocVramMb: parseInt(e.target.value) }))}
+                      value={useGPU ? "gpu" : "cpu"}
+                      onChange={(e) => setUseGPU(e.target.value === "gpu")}
                       className="text-[13px] border border-[var(--border-color)] rounded-lg px-2.5 py-1 bg-transparent outline-none cursor-pointer text-[var(--text-main)]"
                     >
-                      <option className="bg-[var(--modal-bg)]" value={1024}>1 GB VRAM (Low APU)</option>
-                      <option className="bg-[var(--modal-bg)]" value={2048}>2 GB VRAM (Balanced)</option>
-                      <option className="bg-[var(--modal-bg)]" value={4096}>4 GB VRAM (Standard)</option>
-                      <option className="bg-[var(--modal-bg)]" value={8192}>8 GB VRAM (Ultra GPU)</option>
+                      <option className="bg-[var(--modal-bg)]" value="gpu">GPU / WebGPU (Auto)</option>
+                      <option className="bg-[var(--modal-bg)]" value="cpu">CPU Only (Slow/Safe)</option>
                     </select>
                   </div>
 
