@@ -273,6 +273,12 @@ export default function SettingsModal({
                       onChange={(e) => setLanguage(e.target.value)}
                       className="text-[13px] border border-[var(--border-color)] rounded-lg px-2 py-1 bg-transparent outline-none cursor-pointer text-[var(--text-main)]"
                     >
+                      <option value="auto">Auto-detect (English)</option>
+                      <option value="en">English</option>
+                      <option value="es">Español</option>
+                      <option value="fr">Français</option>
+                      <option value="de">Deutsch</option>
+                      <option value="ja">日本語</option>
                     </select>
                   </div>
                 </div>

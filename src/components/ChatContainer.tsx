@@ -181,14 +181,17 @@ export default function ChatContainer({
     let html = code
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
 
-    // Comments: slate grey
-    html = html.replace(/(\/\/.*)/g, '<span class="text-zinc-500 italic">$1</span>');
-    html = html.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="text-zinc-500 italic">$1</span>');
-
-    // Strings: soft emerald green
-    html = html.replace(/(["'`])(.*?)\1/g, '<span class="text-emerald-500">$1$2$1</span>');
+    const tokens: string[] = [];
+    
+    // Save strings and comments to tokens array and replace with placeholders
+    html = html.replace(/(&quot;.*?&quot;|&#39;.*?&#39;|`[\s\S]*?`|\/\/.*|\/\*[\s\S]*?\*\/)/g, (match) => {
+      tokens.push(match);
+      return `__TOKEN_${tokens.length - 1}__`;
+    });
 
     // Numbers: warm amber
     html = html.replace(/\b(\d+n?)\b/g, '<span class="text-amber-500">$1</span>');
@@ -197,7 +200,7 @@ export default function ChatContainer({
     const keywords = [
       'const', 'let', 'var', 'function', 'return', 'class', 'import', 'export', 
       'from', 'extends', 'constructor', 'private', 'public', 'readonly', 'interface', 
-      'type', 'default', 'async', 'await', 'try', 'catch', 'if', 'else', 'for', 'while', 'fn'
+      'type', 'default', 'async', 'await', 'try', 'catch', 'if', 'else', 'for', 'while', 'fn', 'new', 'this'
     ];
     const keywordRegex = new RegExp(`\\b(${keywords.join('|')})\\b`, 'g');
     html = html.replace(keywordRegex, '<span class="text-purple-500 font-semibold">$1</span>');
@@ -205,10 +208,20 @@ export default function ChatContainer({
     // Internal frameworks/type classes: bright titanium
     const builtins = [
       'string', 'number', 'boolean', 'bigint', 'any', 'void', 'Map', 'Set', 'Promise',
-      'Float32Array', 'GPUAdapter', 'GPUDevice', 'GPUBuffer', 'GPUPipeline', 'ArrayBuffer'
+      'Float32Array', 'GPUAdapter', 'GPUDevice', 'GPUBuffer', 'GPUPipeline', 'ArrayBuffer',
+      'Array', 'Object', 'console'
     ];
     const builtinRegex = new RegExp(`\\b(${builtins.join('|')})\\b`, 'g');
     html = html.replace(builtinRegex, '<span class="text-indigo-400 font-medium">$1</span>');
+
+    // Restore tokens
+    html = html.replace(/__TOKEN_(\d+)__/g, (_, index) => {
+      const match = tokens[parseInt(index, 10)];
+      if (match.startsWith('//') || match.startsWith('/*')) {
+        return `<span class="text-zinc-500 italic">${match}</span>`;
+      }
+      return `<span class="text-emerald-500">${match}</span>`;
+    });
 
     return <code className="font-mono text-xs leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />;
   };
@@ -625,7 +638,7 @@ export default function ChatContainer({
                       </div>
                       
                       {/* Message Contents */}
-                      <div className="flex-1 space-y-3 pr-4">
+                      <div className="flex-1 space-y-3 pr-4 min-w-0">
                         {msg.isCodex && (
                           <div className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold font-mono tracking-wider bg-indigo-500/10 text-indigo-500 uppercase select-none">
                             Codex Optimized Response

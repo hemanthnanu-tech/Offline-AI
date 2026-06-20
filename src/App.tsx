@@ -331,9 +331,9 @@ export default function App() {
     
     // Codex-specific instructions
     if (settings.codexEnabled) {
-      finalSystemPrompt += `\n\n[SYSTEM DIRECTIVE: CODEX ENGINE ENABLED]\nYou are an expert Software Engineer and Architect. Your primary goal is to write long, complete, highly accurate, and bug-free code. Think step-by-step. Provide full implementations instead of brief snippets. Format code beautifully.`;
+      finalSystemPrompt += `\n\n[SYSTEM DIRECTIVE: CODEX ENGINE ENABLED]\nYou are an expert Software Engineer and Architect. ONLY respond with exactly what is asked. DO NOT output extra conversational fluff. ALWAYS wrap your code implementations inside proper markdown code blocks. DO NOT output raw unformatted code first. If the user's request is vague or not specific, you MUST ask clarifying questions before writing any code.`;
     } else {
-      finalSystemPrompt += `\n\n[SYSTEM DIRECTIVE: NORMAL MODE]\nYou are a helpful and conversational AI assistant. Provide concise, clear answers. If asked to code, provide basic, simple code snippets.`;
+      finalSystemPrompt += `\n\n[SYSTEM DIRECTIVE: NORMAL MODE]\nYou are a helpful and conversational AI assistant. ONLY respond with exactly what is asked. Do not do anything extra. If the user's request is not specific, ask clarifying questions before answering.`;
     }
 
     if (settings.userName || settings.userDetails) {
