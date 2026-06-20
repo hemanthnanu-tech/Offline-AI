@@ -55,6 +55,7 @@ export default function App() {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [showDemoPopup, setShowDemoPopup] = useState(window.location.hostname === 'hemanthnanu-tech.github.io');
 
   // Sync settings to localStorage
   useEffect(() => {
@@ -614,6 +615,39 @@ export default function App() {
           window.dispatchEvent(new CustomEvent('insert-prompt', { detail: text }));
         }}
       />
+
+      {/* Demo UI Preview Modal */}
+      {showDemoPopup && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-[var(--bg-main)] border border-[var(--border-color)] rounded-2xl shadow-2xl max-w-md w-full p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center mx-auto mb-2">
+              <Eye className="w-6 h-6" />
+            </div>
+            <h2 className="text-xl font-bold text-[var(--text-main)]">UI Preview Mode</h2>
+            <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
+              You are currently viewing the GitHub Pages deployment. This is a <strong>UI Preview only</strong>!
+            </p>
+            <p className="text-[var(--text-muted)] text-[13px] leading-relaxed">
+              Because this app is a fully private, local-first sandbox, it requires a Node.js backend to run the heavy AI models directly on your hardware. Chat features are disabled here.
+            </p>
+            <div className="bg-[var(--bg-hover)]/50 p-3.5 rounded-lg text-xs text-left border border-[var(--border-color)]">
+              <strong className="text-[var(--text-main)] text-[13px]">To run the full app locally:</strong>
+              <ul className="list-disc pl-4 mt-2 space-y-1 text-[var(--text-secondary)]">
+                <li>Download or clone the repository</li>
+                <li>Run <code>npm install</code></li>
+                <li>Download a <code>.gguf</code> model and put it in the <code>models/</code> folder</li>
+                <li>Run <code>npm run dev</code></li>
+              </ul>
+            </div>
+            <button
+              onClick={() => setShowDemoPopup(false)}
+              className="w-full mt-2 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-lg transition"
+            >
+              I Understand, Show Me the UI!
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

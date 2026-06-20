@@ -18,6 +18,20 @@ A high-fidelity, fully private, local-first sandbox environment for running Larg
 - **Deep Personalization:** Tailor the AI's behavior by adding your name, date of birth, and custom details in the settings. The AI natively adapts to your persona.
 - **Rich Interaction:** Full support for Markdown, syntax-highlighted code blocks, text-to-speech dictation, response regeneration, and real-time generation speed metrics (Tokens per Second).
 
+## 📸 Screenshots
+
+*(Replace the links below with your actual screenshot images once uploaded to the repository)*
+
+![App Screenshot 1](./assets/screenshot1-placeholder.png)
+<br>
+![App Screenshot 2](./assets/screenshot2-placeholder.png)
+
+## 🌐 Live UI Preview
+
+You can view a live preview of the User Interface on GitHub Pages: **[Click Here for UI Preview](https://hemanthnanu-tech.github.io/Offline-AI/)**
+
+> **Note:** The GitHub Pages link is a **UI Preview only**. Because this application requires a local Node.js backend to run heavy GGUF AI models on your physical hardware, the chat features will not work on the static preview site. To run the full application, follow the installation instructions below.
+
 ## 🛠️ Technology Stack
 
 - **Frontend:** React 18, TypeScript, Tailwind CSS, Lucide Icons, Vite
