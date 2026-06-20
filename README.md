@@ -72,6 +72,16 @@ You can view a live preview of the User Interface on GitHub Pages: **[Click Here
    ...
    ```
 
+### 🌐 Deploying to GitHub Pages
+
+To update the live GitHub Pages UI demo, simply run:
+```bash
+npm run deploy
+```
+This will automatically build the app and push the `/dist` folder to the `gh-pages` branch. Wait a minute or two for GitHub to process the changes, and your live site at `https://your-username.github.io/Offline-AI/` will be updated!
+
+> **Note:** The GitHub Pages version uses the WebLLM WebGPU fallback to run directly in the browser since GitHub cannot host the Node backend.
+
 4. **Start the application**
    ```bash
    npm run dev
