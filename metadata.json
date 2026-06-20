@@ -1,0 +1,6 @@
+{
+  "name": "Offline AI",
+  "description": "An offline GGUF model parser and WebGPU browser-inference client featuring completely private local AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
