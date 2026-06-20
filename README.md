@@ -10,13 +10,13 @@ A high-fidelity, fully private, local-first sandbox environment for running Larg
 
 ## ✨ Features
 
-- **100% Offline & Private:** All computations happen locally on your hardware. Zero data is sent to the cloud, third-party APIs, or external servers.
+- **100% Offline & Private:** All computations happen locally on your hardware. Zero data is sent to the cloud, third-party APIs, or external servers when running the local Node.js backend.
 - **Sleek, Modern UI:** A beautifully crafted, responsive interface with smooth animations, dark/light mode support, and a highly polished chat experience.
+- **Hardware Monitor & Optimization:** Keep track of your system resources with a built-in live CPU & RAM monitor. Overloaded? Hit the "Clean RAM" button to instantly free up memory and unload active models.
+- **CPU / GPU Toggles:** Need to save battery or don't have a dedicated graphics card? You can easily toggle between standard GPU acceleration or CPU-only execution directly from the UI settings.
+- **Web Demo with API Support:** Trying out the GitHub Pages live demo? You can chat instantly without downloading massive AI models by securely pasting a free Google Gemini API Key in the settings.
 - **Codex Engine Mode:** Toggle a dedicated coding mode that instantly instructs the AI to act as an Expert Software Architect, generating long, accurate, and bug-free code implementations.
 - **Seamless Model Switching:** Drop any supported `.gguf` model into the `models/` directory and hot-swap between them directly from the chat interface.
-- **Prompt Library:** Save, manage, and quickly access your favorite system prompts or use our detailed pre-added expert prompts.
-- **Deep Personalization:** Tailor the AI's behavior by adding your name, date of birth, and custom details in the settings. The AI natively adapts to your persona.
-- **Rich Interaction:** Full support for Markdown, syntax-highlighted code blocks, text-to-speech dictation, response regeneration, and real-time generation speed metrics (Tokens per Second).
 
 ## 📸 Screenshots
 
@@ -28,14 +28,14 @@ A high-fidelity, fully private, local-first sandbox environment for running Larg
 
 ## 🌐 Live UI Preview
 
-You can view a live preview of the User Interface on GitHub Pages: **[Click Here for UI Preview](https://hemanthnanu-tech.github.io/Offline-AI/)**
+You can view a live preview of the User Interface on GitHub Pages: **[Click Here for Live Demo](https://hemanthnanu-tech.github.io/Offline-AI/)**
 
-> **Note:** The GitHub Pages link is a **UI Preview only**. Because this application requires a local Node.js backend to run heavy GGUF AI models on your physical hardware, the chat features will not work on the static preview site. To run the full application, follow the installation instructions below.
+> **Note:** The GitHub Pages link is a lightweight browser demo. By default, it will show a showcase UI. To actually chat on the GitHub Pages demo, simply open **Settings > Model Settings** and paste a free Google Gemini API key to securely stream responses via API.
 
 ## 🛠️ Technology Stack
 
 - **Frontend:** React 18, TypeScript, Tailwind CSS, Lucide Icons, Vite
-- **Backend/Inference:** Node.js, `node-llama-cpp` (for blazing-fast local GGUF inference)
+- **Backend/Inference:** Node.js, `node-llama-cpp` (for blazing-fast local GGUF inference on CPU & GPU)
 - **Styling:** Custom CSS variables for robust theming and dynamic UI states.
 
 ## 🚀 Getting Started
@@ -72,31 +72,30 @@ You can view a live preview of the User Interface on GitHub Pages: **[Click Here
    ...
    ```
 
-### 🌐 Deploying to GitHub Pages
+4. **Start the application**
+   ```bash
+   npm run dev
+   ```
+   *The application will automatically detect your models and start the local development server at `http://localhost:5173`.*
+
+### 🌐 Deploying Updates to GitHub Pages
 
 To update the live GitHub Pages UI demo, simply run:
 ```bash
 npm run deploy
 ```
-This will automatically build the app and push the `/dist` folder to the `gh-pages` branch. Wait a minute or two for GitHub to process the changes, and your live site at `https://your-username.github.io/Offline-AI/` will be updated!
+This will automatically build the app and push the `/dist` folder to the `gh-pages` branch. Wait a minute or two for GitHub to process the changes, and your live site will be updated!
 
-> **Note:** The GitHub Pages version uses the WebLLM WebGPU fallback to run directly in the browser since GitHub cannot host the Node backend.
-
-4. **Start the application**
-   ```bash
-   npm run dev
-   ```
-   *The application will automatically detect your models and start the local development server.*
-
-## 📖 Usage
+## 📖 Usage Guide
 
 - **Switching Models:** Click on the "Offline AI" header at the top of the chat to open the model switcher dropdown.
+- **Hardware Controls:** Use the "Clean RAM" button in the top right to kill the currently loaded model process. Go to **Settings > Model Settings** to swap between GPU rendering and CPU rendering.
 - **Codex Engine:** Open the sidebar and toggle "Codex Engine" to force the AI into an expert programming persona.
-- **Personalization:** Click the gear icon next to your profile name in the bottom left to update your user context and toggle dark mode.
+- **Personalization:** Click the gear icon next to your profile name in the bottom left to update your user context, language, voice settings, and toggle dark mode.
 
 ## 🛡️ Data Protection Guarantee
 
-Offline AI is built on a strict local-first philosophy. Your chat logs, custom prompts, and personal settings remain entirely on your local file system. The application does not contain any telemetry, tracking, or network requests to external inference providers.
+Offline AI is built on a strict local-first philosophy. Your chat logs, custom prompts, and personal settings remain entirely on your local file system. When running the local Node.js server, the application does not contain any telemetry, tracking, or network requests to external inference providers. (Note: The GitHub Pages browser demo securely pings Google APIs only if you explicitly provide an API key).
 
 ## 👨‍💻 Credits & Contributions
 
