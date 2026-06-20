@@ -4,7 +4,7 @@ import ChatContainer from './components/ChatContainer';
 import SettingsModal from './components/SettingsModal';
 import LibraryModal from './components/LibraryModal';
 import { ChatSession, ChatMessage, InferenceSettings, GGUFModelInfo } from './types';
-import { Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff, Loader2, Globe, DownloadCloud } from 'lucide-react';
 import * as webllm from '@mlc-ai/web-llm';
 
 export default function App() {
@@ -674,64 +674,95 @@ export default function App() {
         }}
       />
 
+      {/* Background Download Toast */}
+      {webLlmDownloading && !showDemoPopup && (
+        <div className="fixed top-4 right-4 z-[90] bg-[var(--bg-main)] border border-[var(--border-color)] shadow-xl rounded-xl p-3.5 flex items-center gap-3.5 animate-in slide-in-from-right max-w-sm">
+          <div className="bg-indigo-500/10 p-2 rounded-lg">
+            <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[13px] font-bold text-[var(--text-main)]">Downloading Model</span>
+            <span className="text-[11px] text-[var(--text-muted)] w-full truncate">{webLlmProgress || 'Initializing...'}</span>
+          </div>
+        </div>
+      )}
+
       {/* Demo UI Preview Modal */}
       {showDemoPopup && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-[var(--bg-main)] border border-[var(--border-color)] rounded-2xl shadow-2xl max-w-md w-full p-6 text-center space-y-4">
-            <div className="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center mx-auto mb-2">
-              <Eye className="w-6 h-6" />
-            </div>
-            <h2 className="text-xl font-bold text-[var(--text-main)]">WebGPU Model Required</h2>
-            <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
-              You are currently viewing the GitHub Pages demo. To use the chat features here, your browser will need to download a ~2GB language model (Phi-3.5) directly into your browser cache using WebGPU.
-            </p>
-            
-            {webLlmDownloading ? (
-              <div className="bg-[var(--bg-hover)]/50 p-4 rounded-lg border border-[var(--border-color)]">
-                <Loader2 className="w-6 h-6 animate-spin text-indigo-500 mx-auto mb-2" />
-                <p className="text-[var(--text-main)] text-[13px] font-medium">{webLlmProgress}</p>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className="bg-[var(--bg-main)] border border-[var(--border-color)] rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent p-6 text-center border-b border-[var(--border-color)]">
+              <div className="w-14 h-14 rounded-full bg-[var(--bg-main)] shadow-md flex items-center justify-center mx-auto mb-4 border border-[var(--border-color)]">
+                <Globe className="w-7 h-7 text-indigo-500" />
               </div>
-            ) : (
-              <>
-                <button
-                  onClick={async () => {
-                    setWebLlmDownloading(true);
-                    try {
-                      const engine = new webllm.MLCEngine();
-                      engine.setInitProgressCallback((progress) => {
-                        setWebLlmProgress(progress.text);
-                      });
-                      await engine.reload("Phi-3.5-mini-instruct-q4f16_1-MLC");
-                      setWebLlmEngine(engine);
-                      setWebLlmReady(true);
-                      setWebLlmDownloading(false);
-                      setShowDemoPopup(false);
-                      setActiveModel({
-                        id: 'phi3-webgpu',
-                        name: 'Phi-3.5-Mini (WebGPU)',
-                        fileName: 'phi3.5-webgpu',
-                        architecture: 'phi3',
-                        quantization: 'q4f16_1',
-                        sizeBytes: 2000000000,
-                        path: ''
-                      });
-                    } catch (e) {
-                      console.error("Failed to load WebLLM", e);
-                      setWebLlmProgress("Error loading model. Does your browser support WebGPU?");
-                    }
-                  }}
-                  className="w-full mt-2 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-lg transition"
-                >
-                  Start Download & Load Model
-                </button>
-                <button
-                  onClick={() => setShowDemoPopup(false)}
-                  className="w-full py-2 bg-transparent hover:bg-[var(--bg-hover)] text-[var(--text-main)] font-semibold rounded-lg transition"
-                >
-                  Just View UI (No Chat)
-                </button>
-              </>
-            )}
+              <h2 className="text-2xl font-bold tracking-tight text-[var(--text-main)]" style={{ fontFamily: "'Inter', sans-serif" }}>WebGPU Live Demo</h2>
+              <p className="text-[var(--text-muted)] text-[13px] mt-2">
+                Running directly in your browser. No installation required.
+              </p>
+            </div>
+            
+            <div className="p-6 space-y-5">
+              {!webLlmDownloading ? (
+                <>
+                  <div className="bg-[var(--bg-hover)]/60 p-4 rounded-xl text-sm leading-relaxed text-[var(--text-secondary)] border border-[var(--border-color)]">
+                    To enable chat on this GitHub Pages demo, your browser needs to download a <strong>2GB language model</strong> (Phi-3.5) into its secure cache. This uses your local GPU for 100% private inference.
+                  </div>
+                  <div className="flex flex-col gap-2.5">
+                    <button
+                      onClick={async () => {
+                        setWebLlmDownloading(true);
+                        try {
+                          const engine = new webllm.MLCEngine();
+                          engine.setInitProgressCallback((progress) => {
+                            setWebLlmProgress(progress.text);
+                          });
+                          await engine.reload("Phi-3.5-mini-instruct-q4f16_1-MLC");
+                          setWebLlmEngine(engine);
+                          setWebLlmReady(true);
+                          setWebLlmDownloading(false);
+                          setShowDemoPopup(false);
+                          setActiveModel({
+                            id: 'phi3-webgpu',
+                            name: 'Phi-3.5-Mini (WebGPU)',
+                            fileName: 'phi3.5-webgpu',
+                            architecture: 'phi3',
+                            quantization: 'q4f16_1',
+                            sizeBytes: 2000000000,
+                            path: ''
+                          });
+                        } catch (e) {
+                          console.error("Failed to load WebLLM", e);
+                          setWebLlmProgress("Error loading model. Does your browser support WebGPU?");
+                        }
+                      }}
+                      className="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-xl transition shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+                    >
+                      <DownloadCloud className="w-5 h-5" /> Start Download & Load Model
+                    </button>
+                    <button
+                      onClick={() => setShowDemoPopup(false)}
+                      className="w-full py-2.5 bg-transparent hover:bg-[var(--bg-hover)] text-[var(--text-main)] font-medium rounded-xl transition"
+                    >
+                      Just View UI (No Chat)
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-[var(--bg-hover)]/50 p-6 rounded-xl border border-[var(--border-color)] flex flex-col items-center justify-center text-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-3" />
+                    <p className="text-[var(--text-main)] text-[14px] font-semibold mb-1">Downloading Model Shards...</p>
+                    <p className="text-[var(--text-muted)] text-[12px] font-medium max-w-[280px] truncate">{webLlmProgress || 'Initializing...'}</p>
+                  </div>
+                  <button
+                    onClick={() => setShowDemoPopup(false)}
+                    className="w-full py-2.5 bg-[var(--bg-hover)] hover:bg-[var(--border-color)] border border-transparent hover:border-[var(--border-color)] text-[var(--text-main)] font-semibold rounded-xl transition"
+                  >
+                    Run in Background
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
