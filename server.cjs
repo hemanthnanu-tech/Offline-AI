@@ -28,6 +28,7 @@ var import_promises = __toESM(require("fs/promises"), 1);
 var import_vite = require("vite");
 var import_dotenv = __toESM(require("dotenv"), 1);
 var import_node_llama_cpp = require("node-llama-cpp");
+var import_os = __toESM(require("os"), 1);
 import_dotenv.default.config();
 async function startServer() {
   const app = (0, import_express.default)();
@@ -36,7 +37,7 @@ async function startServer() {
   let model = null;
   let context = null;
   let detectedModelInfo = null;
-  async function loadGgufModel(specificFileName) {
+  async function loadGgufModel(specificFileName, useGPU = true) {
     if (context) {
       try {
         await context.dispose();
@@ -57,9 +58,14 @@ async function startServer() {
         const sizeGB = (stat.size / (1024 * 1024 * 1024)).toFixed(2);
         console.log(`Found GGUF model: ${ggufFile} (${sizeGB} GB). Loading into memory...`);
         const llama = await (0, import_node_llama_cpp.getLlama)();
-        model = await llama.loadModel({
-          modelPath
-        });
+        const loadParams = { modelPath };
+        if (!useGPU) {
+          loadParams.gpuLayers = 0;
+          console.log("CPU Mode explicitly requested. GPU layers set to 0.");
+        } else {
+          console.log("GPU Mode enabled (default).");
+        }
+        model = await llama.loadModel(loadParams);
         context = await model.createContext();
         detectedModelInfo = {
           name: ggufFile.replace(".gguf", "").replace(/[-_]/g, " "),
@@ -115,12 +121,41 @@ async function startServer() {
   });
   app.post("/api/reload", async (req, res) => {
     console.log("Reloading GGUF model by user request...");
-    const success = await loadGgufModel();
+    const { useGPU } = req.body || {};
+    const success = await loadGgufModel(void 0, useGPU !== false);
     res.json({
       success,
       modelLoaded: !!model,
       modelInfo: detectedModelInfo
     });
+  });
+  app.get("/api/system-stats", (req, res) => {
+    const totalRam = import_os.default.totalmem();
+    const freeRam = import_os.default.freemem();
+    const cpus = import_os.default.cpus();
+    const cpuLoad = import_os.default.loadavg()[0] || 0;
+    const totalGB = (totalRam / 1024 ** 3).toFixed(1);
+    const freeGB = (freeRam / 1024 ** 3).toFixed(1);
+    const cpuPerc = Math.min(100, Math.round(cpuLoad * 100 / cpus.length)) + "%";
+    res.json({
+      cpu: cpuPerc,
+      freeRam: `${freeGB}GB`,
+      totalRam: `${totalGB}GB`
+    });
+  });
+  app.post("/api/unload", async (req, res) => {
+    console.log("Unloading model to free RAM...");
+    if (context) {
+      try {
+        await context.dispose();
+      } catch (e) {
+      }
+      context = null;
+    }
+    model = null;
+    detectedModelInfo = null;
+    if (global.gc) global.gc();
+    res.json({ success: true });
   });
   app.post("/api/chat", async (req, res) => {
     if (!model || !context) {
