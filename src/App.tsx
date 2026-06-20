@@ -4,7 +4,7 @@ import ChatContainer from './components/ChatContainer';
 import SettingsModal from './components/SettingsModal';
 import LibraryModal from './components/LibraryModal';
 import { ChatSession, ChatMessage, InferenceSettings, GGUFModelInfo } from './types';
-import { Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff, Loader2, Globe, DownloadCloud } from 'lucide-react';
+import { Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff, Loader2, Globe, DownloadCloud, ChevronDown, ChevronUp, Square } from 'lucide-react';
 import * as webllm from '@mlc-ai/web-llm';
 
 export default function App() {
@@ -65,6 +65,7 @@ export default function App() {
   const [webLlmProgress, setWebLlmProgress] = useState<string>('');
   const [webLlmReady, setWebLlmReady] = useState(false);
   const [webLlmDownloading, setWebLlmDownloading] = useState(false);
+  const [showDownloadDetails, setShowDownloadDetails] = useState(false);
 
   // Sync settings to localStorage
   useEffect(() => {
@@ -752,14 +753,44 @@ export default function App() {
                   <div className="bg-[var(--bg-hover)]/50 p-6 rounded-xl border border-[var(--border-color)] flex flex-col items-center justify-center text-center">
                     <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-3" />
                     <p className="text-[var(--text-main)] text-[14px] font-semibold mb-1">Downloading Model Shards...</p>
-                    <p className="text-[var(--text-muted)] text-[12px] font-medium max-w-[280px] truncate">{webLlmProgress || 'Initializing...'}</p>
+                    
+                    <button 
+                      onClick={() => setShowDownloadDetails(!showDownloadDetails)}
+                      className="flex items-center gap-1 mt-1 text-[12px] text-indigo-500 hover:text-indigo-400 transition cursor-pointer"
+                    >
+                      {showDownloadDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      {showDownloadDetails ? 'Hide details' : 'Show details'}
+                    </button>
+                    
+                    {showDownloadDetails ? (
+                      <div className="mt-3 p-3 bg-black/10 dark:bg-black/40 rounded-lg text-left w-full border border-[var(--border-color)]">
+                        <p className="text-[var(--text-secondary)] text-[11px] font-mono break-all">{webLlmProgress || 'Initializing...'}</p>
+                      </div>
+                    ) : (
+                      <p className="text-[var(--text-muted)] text-[12px] font-medium max-w-[280px] truncate mt-1">{webLlmProgress || 'Initializing...'}</p>
+                    )}
                   </div>
-                  <button
-                    onClick={() => setShowDemoPopup(false)}
-                    className="w-full py-2.5 bg-[var(--bg-hover)] hover:bg-[var(--border-color)] border border-transparent hover:border-[var(--border-color)] text-[var(--text-main)] font-semibold rounded-xl transition"
-                  >
-                    Run in Background
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setWebLlmDownloading(false);
+                        if (webLlmEngine) {
+                          webLlmEngine.unload();
+                          setWebLlmEngine(null);
+                        }
+                      }}
+                      className="w-1/3 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-semibold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                      title="Pause / Stop Download completely"
+                    >
+                      <Square className="w-3.5 h-3.5 fill-current" /> Stop
+                    </button>
+                    <button
+                      onClick={() => setShowDemoPopup(false)}
+                      className="w-2/3 py-2.5 bg-[var(--bg-hover)] hover:bg-[var(--border-color)] border border-transparent hover:border-[var(--border-color)] text-[var(--text-main)] font-semibold rounded-xl transition cursor-pointer"
+                    >
+                      Run in Background
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

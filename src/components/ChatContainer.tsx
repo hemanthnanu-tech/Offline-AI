@@ -489,9 +489,11 @@ export default function ChatContainer({
                       onClick={generating ? onStopGeneration : undefined}
                       disabled={!inputText.trim() && !generating && !isListening}
                       className={`w-[36px] h-[36px] rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                        inputText.trim() || isListening || generating
-                          ? 'bg-[#007aff] text-white shadow-sm hover:bg-[#0062cc]'
-                          : 'bg-[#e0e0e0] text-[#a0a0a0] dark:bg-[#333] dark:text-[#666]'
+                        generating 
+                          ? 'bg-red-500 text-white shadow-sm hover:bg-red-600'
+                          : inputText.trim() || isListening
+                            ? 'bg-[#007aff] text-white shadow-sm hover:bg-[#0062cc]'
+                            : 'bg-[#e0e0e0] text-[#a0a0a0] dark:bg-[#333] dark:text-[#666]'
                       }`}
                       title={generating ? "Stop generating" : "Send"}
                     >
@@ -754,9 +756,11 @@ export default function ChatContainer({
                   onClick={generating ? onStopGeneration : undefined}
                   disabled={!inputText.trim() && !generating && !isListening}
                   className={`w-[36px] h-[36px] rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                    inputText.trim() || isListening || generating
-                      ? 'bg-[#007aff] text-white shadow-sm hover:bg-[#0062cc]'
-                      : 'bg-[#e0e0e0] text-[#a0a0a0] dark:bg-[#333] dark:text-[#666]'
+                    generating 
+                      ? 'bg-red-500 text-white shadow-sm hover:bg-red-600'
+                      : inputText.trim() || isListening
+                        ? 'bg-[#007aff] text-white shadow-sm hover:bg-[#0062cc]'
+                        : 'bg-[#e0e0e0] text-[#a0a0a0] dark:bg-[#333] dark:text-[#666]'
                   }`}
                   title={generating ? "Stop generating" : "Send"}
                 >
