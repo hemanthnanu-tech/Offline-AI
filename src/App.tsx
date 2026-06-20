@@ -4,7 +4,8 @@ import ChatContainer from './components/ChatContainer';
 import SettingsModal from './components/SettingsModal';
 import LibraryModal from './components/LibraryModal';
 import { ChatSession, ChatMessage, InferenceSettings, GGUFModelInfo } from './types';
-import { Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff } from 'lucide-react';
+import { Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff, Loader2 } from 'lucide-react';
+import * as webllm from '@mlc-ai/web-llm';
 
 export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -55,7 +56,15 @@ export default function App() {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const [showDemoPopup, setShowDemoPopup] = useState(window.location.hostname === 'hemanthnanu-tech.github.io');
+  const isGithubPages = window.location.hostname === 'hemanthnanu-tech.github.io';
+  const [showDemoPopup, setShowDemoPopup] = useState(isGithubPages);
+
+  // WebLLM State
+  const [isWebLLMMode, setIsWebLLMMode] = useState(isGithubPages);
+  const [webLlmEngine, setWebLlmEngine] = useState<webllm.MLCEngine | null>(null);
+  const [webLlmProgress, setWebLlmProgress] = useState<string>('');
+  const [webLlmReady, setWebLlmReady] = useState(false);
+  const [webLlmDownloading, setWebLlmDownloading] = useState(false);
 
   // Sync settings to localStorage
   useEffect(() => {
@@ -335,59 +344,108 @@ export default function App() {
     }
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: updatedMessages,
-          systemPrompt: finalSystemPrompt,
-          temperature: settings.temperature
-        }),
-        signal: controller.signal
-      });
+      if (isWebLLMMode && webLlmReady && webLlmEngine) {
+        // WebLLM Inference Route
+        const startTime = Date.now();
+        let tokenCount = 0;
+        let fullContent = "";
 
-      if (!res.ok) throw new Error("Failed to connect to backend");
-      
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder("utf-8");
-      
-      let fullContent = "";
-      const startTime = Date.now();
-      let tokenCount = 0;
+        // Format history for WebLLM
+        const chatCompletionMessages: webllm.ChatCompletionMessageParam[] = [
+          { role: 'system', content: finalSystemPrompt },
+          ...updatedMessages.map(msg => ({
+            role: msg.role === 'assistant' ? 'assistant' as const : 'user' as const,
+            content: msg.content
+          }))
+        ];
 
-      while (reader) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        const chunkStr = decoder.decode(value, { stream: true });
-        const lines = chunkStr.split("\n");
-        
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (trimmedLine.startsWith("data: ") && trimmedLine !== "data: [DONE]") {
-            try {
-              const data = JSON.parse(trimmedLine.substring(6));
-              if (data.chunk) {
-                fullContent += data.chunk;
-                tokenCount++;
-                
-                const timeElapsed = (Date.now() - startTime) / 1000;
-                const tps = timeElapsed > 0 ? tokenCount / timeElapsed : 0;
-                
-                setSessions(prev => prev.map(s => {
-                  if (s.id === activeSessionId) {
-                    const msgs = [...s.messages];
-                    const targetIdx = msgs.findIndex(m => m.id === responseId);
-                    if (targetIdx !== -1) {
-                      msgs[targetIdx] = { ...msgs[targetIdx], content: fullContent, tokensPerSecond: parseFloat(tps.toFixed(2)) };
-                    }
-                    return { ...s, messages: msgs };
-                  }
-                  return s;
-                }));
+        const asyncChunkGenerator = await webLlmEngine.chat.completions.create({
+          stream: true,
+          messages: chatCompletionMessages,
+          temperature: settings.temperature,
+          top_p: settings.topP,
+          max_tokens: settings.maxTokens
+        });
+
+        for await (const chunk of asyncChunkGenerator) {
+          if (controller.signal.aborted) break;
+          
+          const delta = chunk.choices[0]?.delta?.content || "";
+          if (delta) {
+            fullContent += delta;
+            tokenCount++;
+            const timeElapsed = (Date.now() - startTime) / 1000;
+            const tps = timeElapsed > 0 ? tokenCount / timeElapsed : 0;
+            
+            setSessions(prev => prev.map(s => {
+              if (s.id === activeSessionId) {
+                const msgs = [...s.messages];
+                const targetIdx = msgs.findIndex(m => m.id === responseId);
+                if (targetIdx !== -1) {
+                  msgs[targetIdx] = { ...msgs[targetIdx], content: fullContent, tokensPerSecond: parseFloat(tps.toFixed(2)) };
+                }
+                return { ...s, messages: msgs };
               }
-            } catch (e) {
-              // Ignore parse errors on split chunks
+              return s;
+            }));
+          }
+        }
+      } else {
+        // Node.js Backend Route
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: updatedMessages,
+            systemPrompt: finalSystemPrompt,
+            temperature: settings.temperature
+          }),
+          signal: controller.signal
+        });
+
+        if (!res.ok) throw new Error("Failed to connect to backend");
+        
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder("utf-8");
+        
+        let fullContent = "";
+        const startTime = Date.now();
+        let tokenCount = 0;
+
+        while (reader) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunkStr = decoder.decode(value, { stream: true });
+          const lines = chunkStr.split("\n");
+          
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith("data: ") && trimmedLine !== "data: [DONE]") {
+              try {
+                const data = JSON.parse(trimmedLine.substring(6));
+                if (data.chunk) {
+                  fullContent += data.chunk;
+                  tokenCount++;
+                  
+                  const timeElapsed = (Date.now() - startTime) / 1000;
+                  const tps = timeElapsed > 0 ? tokenCount / timeElapsed : 0;
+                  
+                  setSessions(prev => prev.map(s => {
+                    if (s.id === activeSessionId) {
+                      const msgs = [...s.messages];
+                      const targetIdx = msgs.findIndex(m => m.id === responseId);
+                      if (targetIdx !== -1) {
+                        msgs[targetIdx] = { ...msgs[targetIdx], content: fullContent, tokensPerSecond: parseFloat(tps.toFixed(2)) };
+                      }
+                      return { ...s, messages: msgs };
+                    }
+                    return s;
+                  }));
+                }
+              } catch (e) {
+                // Ignore parse errors on split chunks
+              }
             }
           }
         }
@@ -623,28 +681,57 @@ export default function App() {
             <div className="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center mx-auto mb-2">
               <Eye className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-bold text-[var(--text-main)]">UI Preview Mode</h2>
+            <h2 className="text-xl font-bold text-[var(--text-main)]">WebGPU Model Required</h2>
             <p className="text-[var(--text-muted)] text-[14px] leading-relaxed">
-              You are currently viewing the GitHub Pages deployment. This is a <strong>UI Preview only</strong>!
+              You are currently viewing the GitHub Pages demo. To use the chat features here, your browser will need to download a ~2GB language model (Phi-3.5) directly into your browser cache using WebGPU.
             </p>
-            <p className="text-[var(--text-muted)] text-[13px] leading-relaxed">
-              Because this app is a fully private, local-first sandbox, it requires a Node.js backend to run the heavy AI models directly on your hardware. Chat features are disabled here.
-            </p>
-            <div className="bg-[var(--bg-hover)]/50 p-3.5 rounded-lg text-xs text-left border border-[var(--border-color)]">
-              <strong className="text-[var(--text-main)] text-[13px]">To run the full app locally:</strong>
-              <ul className="list-disc pl-4 mt-2 space-y-1 text-[var(--text-secondary)]">
-                <li>Download or clone the repository</li>
-                <li>Run <code>npm install</code></li>
-                <li>Download a <code>.gguf</code> model and put it in the <code>models/</code> folder</li>
-                <li>Run <code>npm run dev</code></li>
-              </ul>
-            </div>
-            <button
-              onClick={() => setShowDemoPopup(false)}
-              className="w-full mt-2 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-lg transition"
-            >
-              I Understand, Show Me the UI!
-            </button>
+            
+            {webLlmDownloading ? (
+              <div className="bg-[var(--bg-hover)]/50 p-4 rounded-lg border border-[var(--border-color)]">
+                <Loader2 className="w-6 h-6 animate-spin text-indigo-500 mx-auto mb-2" />
+                <p className="text-[var(--text-main)] text-[13px] font-medium">{webLlmProgress}</p>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={async () => {
+                    setWebLlmDownloading(true);
+                    try {
+                      const engine = new webllm.MLCEngine();
+                      engine.setInitProgressCallback((progress) => {
+                        setWebLlmProgress(progress.text);
+                      });
+                      await engine.reload("Phi-3.5-mini-instruct-q4f16_1-MLC");
+                      setWebLlmEngine(engine);
+                      setWebLlmReady(true);
+                      setWebLlmDownloading(false);
+                      setShowDemoPopup(false);
+                      setActiveModel({
+                        id: 'phi3-webgpu',
+                        name: 'Phi-3.5-Mini (WebGPU)',
+                        fileName: 'phi3.5-webgpu',
+                        architecture: 'phi3',
+                        quantization: 'q4f16_1',
+                        sizeBytes: 2000000000,
+                        path: ''
+                      });
+                    } catch (e) {
+                      console.error("Failed to load WebLLM", e);
+                      setWebLlmProgress("Error loading model. Does your browser support WebGPU?");
+                    }
+                  }}
+                  className="w-full mt-2 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-lg transition"
+                >
+                  Start Download & Load Model
+                </button>
+                <button
+                  onClick={() => setShowDemoPopup(false)}
+                  className="w-full py-2 bg-transparent hover:bg-[var(--bg-hover)] text-[var(--text-main)] font-semibold rounded-lg transition"
+                >
+                  Just View UI (No Chat)
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
