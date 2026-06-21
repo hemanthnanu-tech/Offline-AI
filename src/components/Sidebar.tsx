@@ -72,7 +72,7 @@ export default function Sidebar({
 
   return (
     <div 
-      className="w-64 h-full flex flex-col chatgpt-sidebar text-[var(--text-main)] font-sans border-r border-[var(--border-color)]"
+      className="w-64 h-full flex flex-col chatgpt-sidebar text-[var(--text-main)] font-sans border-r border-[var(--border-color)] bg-[var(--bg-sidebar)]/80 backdrop-blur-xl"
       id="chat-sidebar"
     >
       {/* Top Header Controls */}
@@ -80,7 +80,7 @@ export default function Sidebar({
         <button
           type="button"
           onClick={onCloseSidebar}
-          className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-main)] transition cursor-pointer"
+          className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-main)] transition-all cursor-pointer active:scale-95 hover:scale-105"
           title="Collapse Sidebar"
         >
           <PanelLeftClose className="w-5 h-5" />
@@ -89,7 +89,7 @@ export default function Sidebar({
         <button
           type="button"
           onClick={onNewSession}
-          className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-main)] transition cursor-pointer"
+          className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-main)] transition-all cursor-pointer active:scale-95 hover:scale-105"
           title="New Chat"
         >
           <SquarePen className="w-5 h-5" />
@@ -103,7 +103,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={onNewSession}
-            className={`w-full sidebar-item ${sessions.length === 0 || !activeSessionId ? 'active' : ''}`}
+            className={`w-full sidebar-item active:scale-[0.98] transition-transform ${sessions.length === 0 || !activeSessionId ? 'active' : ''}`}
           >
             <SquarePen className="w-[18px] h-[18px] text-[var(--text-main)]" />
             <span>New chat</span>
@@ -183,9 +183,9 @@ export default function Sidebar({
                     <div
                       key={session.id}
                       onClick={() => onSelectSession(session.id)}
-                      className={`group relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm transition cursor-pointer select-none border border-transparent ${
+                      className={`group relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm transition-all cursor-pointer select-none border border-transparent active:scale-[0.98] ${
                         isActive 
-                          ? 'bg-[var(--bg-hover)] text-[var(--text-main)] font-medium' 
+                          ? 'bg-[var(--bg-hover)] text-[var(--text-main)] font-medium shadow-sm' 
                           : 'text-[var(--text-main)] hover:bg-[var(--bg-hover)]/60'
                       }`}
                     >
@@ -245,9 +245,9 @@ export default function Sidebar({
       {/* Profile Bar matching the mockup (Orange Avatar + Marketplace Icon) */}
       <div 
         onClick={onOpenSettings}
-        className="p-3.5 border-t border-[var(--border-color)] bg-transparent flex items-center justify-between cursor-pointer hover:bg-[var(--bg-hover)] transition duration-150 select-none"
+        className="p-3.5 border-t border-[var(--border-color)] bg-transparent flex items-center justify-between cursor-pointer hover:bg-[var(--bg-hover)] transition-all duration-150 select-none active:bg-[var(--bg-hover)]"
       >
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 hover:scale-[1.02] transition-transform">
           {/* Orange Avatar */}
           <div className="w-7 h-7 rounded-full bg-[#f48c06] text-white text-[11px] font-bold flex items-center justify-center shrink-0">
             {settings.userName ? settings.userName.charAt(0).toUpperCase() : 'U'}

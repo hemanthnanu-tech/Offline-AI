@@ -1,14 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Send, Plus, Mic, Image, Edit3, Globe, ChevronDown, 
-  HelpCircle, Copy, Check, RefreshCw, Cpu, User, Edit2, AlertCircle, Volume2, VolumeX, MicOff,
-  PanelLeftOpen, PanelLeftClose, ThumbsUp, ThumbsDown, Trash2, Square, Brain, Code
+  Settings, Sparkles, Send, Brain, Edit3, Image as ImageIcon, Check, Download, AlertCircle, Copy, Mic, Square, CheckSquare, Plus, RefreshCw, ChevronDown, ChevronUp, Loader2, Trash2, ShieldAlert, Cpu, HardDrive, Volume2, VolumeX, ThumbsUp, ThumbsDown, Database, Terminal, Code, HelpCircle, Eye, EyeOff, LayoutGrid, Globe, X, MicOff, PanelLeftOpen, PanelLeftClose, User, Edit2
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { ChatMessage, InferenceSettings, GGUFModelInfo } from '../types';
 
 interface ChatContainerProps {
   messages: ChatMessage[];
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string, images?: string[]) => void;
   onRegenerate: () => void;
   onEditMessage: (index: number, newText: string) => void;
   activeModel: GGUFModelInfo | null;
@@ -38,18 +41,30 @@ export default function ChatContainer({
   onLoadModel
 }: ChatContainerProps) {
   const [inputText, setInputText] = useState('');
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
   const [editingMsgIndex, setEditingMsgIndex] = useState<number | null>(null);
   const [editingText, setEditingText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Custom states
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [feedbacks, setFeedbacks] = useState<Record<string, 'good' | 'bad'>>({});
   
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Focus input when generation completes
+  useEffect(() => {
+    if (!generating && inputRef.current && !isListening) {
+      // Small timeout ensures focus happens after re-render completes
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [generating, isListening]);
 
   // Listen to library prompt selection event
   useEffect(() => {
@@ -143,20 +158,51 @@ export default function ChatContainer({
   };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!scrollViewportRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollViewportRef.current;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+    
+    if (isNearBottom || messages.length <= 1) {
+      scrollViewportRef.current.scrollTo({
+        top: scrollViewportRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
   }, [messages, generating]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || generating) return;
-    onSubmit(inputText.trim());
+    if ((!inputText.trim() && selectedImages.length === 0) || generating) return;
+    
+    // Instead of passing images to onSubmit, we will dispatch an event or modify onSubmit.
+    // Wait, onSubmit only takes string right now. Let's pass it via window.dispatchEvent or we must change onSubmit signature.
+    // Let's modify the onSubmit prop signature in ChatContainer to accept images. 
+    onSubmit(inputText.trim(), selectedImages);
     setInputText('');
+    setSelectedImages([]);
   };
 
-  const handleCopyCode = (code: string, blockId: string) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setSelectedImages(prev => [...prev, event.target!.result as string]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeImage = (indexToRemove: number) => {
+    setSelectedImages(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);
-    setCopiedId(blockId);
-    setTimeout(() => setCopiedId(null), 2000);
+    setCopiedText(code);
+    setTimeout(() => setCopiedText(null), 2000);
   };
 
   const handleSuggestedPrompt = (prompt: string) => {
@@ -176,173 +222,13 @@ export default function ChatContainer({
     setEditingMsgIndex(null);
   };
 
-  // High precision syntax tokenizer for code highlighting
-  const tokenizeAndHighlight = (code: string, lang: string) => {
-    let html = code
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
 
-    const tokens: string[] = [];
-    
-    // Save strings and comments to tokens array and replace with placeholders
-    html = html.replace(/(&quot;.*?&quot;|&#39;.*?&#39;|`[\s\S]*?`|\/\/.*|\/\*[\s\S]*?\*\/)/g, (match) => {
-      tokens.push(match);
-      return `__TOKEN_${tokens.length - 1}__`;
-    });
-
-    // Numbers: warm amber
-    html = html.replace(/\b(\d+n?)\b/g, '<span class="text-amber-500">$1</span>');
-
-    // Keywords: deep pink/purple
-    const keywords = [
-      'const', 'let', 'var', 'function', 'return', 'class', 'import', 'export', 
-      'from', 'extends', 'constructor', 'private', 'public', 'readonly', 'interface', 
-      'type', 'default', 'async', 'await', 'try', 'catch', 'if', 'else', 'for', 'while', 'fn', 'new', 'this'
-    ];
-    const keywordRegex = new RegExp(`\\b(${keywords.join('|')})\\b`, 'g');
-    html = html.replace(keywordRegex, '<span class="text-purple-500 font-semibold">$1</span>');
-
-    // Internal frameworks/type classes: bright titanium
-    const builtins = [
-      'string', 'number', 'boolean', 'bigint', 'any', 'void', 'Map', 'Set', 'Promise',
-      'Float32Array', 'GPUAdapter', 'GPUDevice', 'GPUBuffer', 'GPUPipeline', 'ArrayBuffer',
-      'Array', 'Object', 'console'
-    ];
-    const builtinRegex = new RegExp(`\\b(${builtins.join('|')})\\b`, 'g');
-    html = html.replace(builtinRegex, '<span class="text-indigo-400 font-medium">$1</span>');
-
-    // Restore tokens
-    html = html.replace(/__TOKEN_(\d+)__/g, (_, index) => {
-      const match = tokens[parseInt(index, 10)];
-      if (match.startsWith('//') || match.startsWith('/*')) {
-        return `<span class="text-zinc-500 italic">${match}</span>`;
-      }
-      return `<span class="text-emerald-500">${match}</span>`;
-    });
-
-    return <code className="font-mono text-xs leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />;
-  };
-
-  // Splits message text blocks and GGUF markdown segments
-  const parseMessageContent = (content: string, msgId: string) => {
-    const parts = content.split(/(```[\s\S]*?```)/g);
-    
-    return parts.map((part, index) => {
-      if (part.startsWith('```') && part.endsWith('```')) {
-        const lines = part.slice(3, -3).trim().split('\n');
-        const firstLine = lines[0].trim();
-        const detectedLang = ['javascript', 'typescript', 'ts', 'js', 'html', 'css', 'python', 'rust', 'go', 'c++', 'json', 'bash', 'sh'].includes(firstLine.toLowerCase()) 
-          ? firstLine 
-          : 'code';
-        
-        const codeContent = detectedLang !== 'code' ? lines.slice(1).join('\n') : lines.join('\n');
-        const blockId = `${msgId}-code-${index}`;
-
-        return (
-          <div key={index} className="my-4 border border-[var(--border-color)] rounded-xl bg-[var(--bg-hover)]/30 overflow-hidden shadow-sm font-mono w-full" id={blockId}>
-            {/* Elegant dark toolbar inside codeblocks */}
-            <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-hover)] text-[var(--text-muted)] border-b border-[var(--border-color)] text-[10px] font-mono select-none">
-              <span className="uppercase text-[var(--text-main)] tracking-wider font-semibold">
-                {detectedLang === 'ts' ? 'TYPESCRIPT' : detectedLang === 'js' ? 'JAVASCRIPT' : detectedLang}
-              </span>
-              
-              <button
-                type="button"
-                onClick={() => handleCopyCode(codeContent, blockId)}
-                className="flex items-center gap-1.5 hover:text-[var(--text-main)] transition cursor-pointer text-[var(--text-muted)]"
-                title="Copy codeblock"
-              >
-                {copiedId === blockId ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                    <span className="text-emerald-500 font-semibold font-sans">Copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span className="font-sans">Copy</span>
-                  </>
-                )}
-              </button>
-            </div>
-            {/* Code Body rendering block */}
-            <div className="p-4 overflow-x-auto bg-transparent max-h-[420px]">
-              <pre className="text-[var(--text-main)] select-text">
-                {tokenizeAndHighlight(codeContent, detectedLang)}
-              </pre>
-            </div>
-          </div>
-        );
-      } else {
-        const lines = part.split('\n');
-        return (
-          <div key={index} className="space-y-2 text-[15px] leading-relaxed text-[var(--text-main)] select-text font-normal">
-            {lines.map((line, lIdx) => {
-              if (line.startsWith('### ')) {
-                return (
-                  <h4 key={lIdx} className="text-sm font-bold tracking-tight text-[var(--text-main)] pt-3 mb-1">
-                    {line.slice(4).replace(/\*\*(.*?)\*\*/g, '$1')}
-                  </h4>
-                );
-              }
-              if (line.startsWith('## ')) {
-                return (
-                  <h3 key={lIdx} className="text-base font-bold text-[var(--text-main)] pt-4 mb-1">
-                    {line.slice(3).replace(/\*\*(.*?)\*\*/g, '$1')}
-                  </h3>
-                );
-              }
-              if (line.startsWith('- ') || line.startsWith('* ')) {
-                return (
-                  <ul key={lIdx} className="list-disc pl-5 my-1 space-y-1">
-                    <li className="text-[var(--text-main)] font-normal">
-                      {line.slice(2).replace(/\*\*(.*?)\*\*/g, '$1')}
-                    </li>
-                  </ul>
-                );
-              }
-              if (line.startsWith('1. ') || /^\d+\.\s/.test(line)) {
-                return (
-                  <ol key={lIdx} className="list-decimal pl-5 my-1 space-y-1">
-                    <li className="text-[var(--text-main)] font-normal">
-                      {line.replace(/^\d+\.\s/, '').replace(/\*\*(.*?)\*\*/g, '$1')}
-                    </li>
-                  </ol>
-                );
-              }
-              
-              // Apply basic inline bold replacements
-              let formattedLine = line;
-              const matches = line.match(/\*\*(.*?)\*\*/g);
-              if (matches) {
-                matches.forEach(m => {
-                  const cleaned = m.slice(2, -2);
-                  formattedLine = formattedLine.replace(m, `<strong class="font-bold text-[var(--text-main)]">${cleaned}</strong>`);
-                });
-              }
-
-              return (
-                <p 
-                  key={lIdx} 
-                  className="min-h-[1rem] text-[var(--text-main)]"
-                  dangerouslySetInnerHTML={{ __html: formattedLine }}
-                />
-              );
-            })}
-          </div>
-        );
-      }
-    });
-  };
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[var(--bg-main)] relative overflow-hidden" id="chat-container">
       
       {/* Top Header - Replicated ChatGPT model dropdown and options */}
-      <header className="h-14 flex items-center justify-between px-4 bg-[var(--bg-main)] sticky top-0 z-20 select-none border-b border-transparent">
+      <header className="h-14 flex items-center justify-between px-4 bg-[var(--bg-main)]/80 backdrop-blur-xl sticky top-0 z-20 select-none border-b border-transparent transition-colors">
         <div className="flex items-center relative">
           {/* Collapse Open Menu Icon */}
           {!sidebarOpen && (
@@ -364,6 +250,12 @@ export default function ChatContainer({
             <span className="text-[18px] font-bold tracking-tight text-[var(--text-main)]" style={{ fontFamily: "'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" }}>
               Offline AI
             </span>
+            {activeModel && (
+              <span className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ml-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                {activeModel.name}
+              </span>
+            )}
             <ChevronDown className="w-4 h-4 text-[var(--text-muted)] mt-0.5" />
           </div>
 
@@ -376,7 +268,25 @@ export default function ChatContainer({
                 {/* Current Active Model Info Box */}
                 {activeModel && (
                   <div className="mb-2 p-3 bg-[var(--bg-hover)]/50 rounded-lg border border-[var(--border-color)]">
-                    <div className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1">Current Model</div>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Current Model</div>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await fetch('/api/unload', { method: 'POST' });
+                            alert('Memory cleaned and model unloaded.');
+                            window.location.reload();
+                          } catch (err) {
+                            console.error(err);
+                          }
+                        }}
+                        className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded px-1.5 py-0.5 text-[9px] font-bold transition flex items-center gap-1 cursor-pointer"
+                        title="Unload Model and Clean RAM"
+                      >
+                        <Square className="w-2 h-2 fill-current" /> KILL / CLEAN RAM
+                      </button>
+                    </div>
                     <div className="text-[14px] font-semibold text-[var(--text-main)] truncate" title={activeModel.name}>
                       {activeModel.name}
                     </div>
@@ -446,7 +356,7 @@ export default function ChatContainer({
       </header>
 
       {/* Chat messages viewport */}
-      <div className="flex-1 overflow-y-auto scroll-smooth transition-all duration-300 ease-in-out" id="messages-scroller">
+      <div ref={scrollViewportRef} className="flex-1 overflow-y-auto scroll-smooth transition-all duration-300 ease-in-out" id="messages-scroller">
         {settings.codexEnabled && (
           <div className="sticky top-0 z-20 flex justify-center mt-2 pointer-events-none">
             <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-4 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase flex items-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-pulse-slow backdrop-blur-md">
@@ -457,117 +367,130 @@ export default function ChatContainer({
         )}
         <div className="max-w-3xl mx-auto pt-6 pb-24 px-4 sm:px-6">
         {messages.length === 0 ? (
-          /* Landing Screen matching mockup */
-          <div className="max-w-xl mx-auto pt-28 space-y-10" id="empty-landing">
-            {/* Center Heading */}
-            <h2 className="landing-heading text-center text-[var(--text-main)]">
-              Where should we begin?
+          /* Exact ChatGPT replica - home screen */
+          <div className="flex flex-col items-center justify-center" style={{minHeight:'65vh'}} id="empty-landing">
+            <h2 style={{fontSize:'28px', fontWeight:600, color:'var(--text-main)', marginBottom:'32px', textAlign:'center', letterSpacing:'-0.5px', fontFamily:"'Inter', 'Segoe UI', sans-serif"}}>
+              What's on your mind today?
             </h2>
 
-            {/* Centered prompt uploader / input pill layout */}
-            <div className="w-full max-w-3xl mx-auto flex flex-col items-center">
-                <form onSubmit={handleSubmit} className="w-full bg-[var(--bg-input)] border border-[var(--input-border)] rounded-full shadow-sm flex items-center px-2 py-1.5 transition hover:shadow focus-within:shadow">
-                  <button
-                    type="button"
-                    onClick={() => alert("File attachments coming soon!")}
-                    className="p-1.5 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-main)] transition cursor-pointer shrink-0 ml-1"
-                    title="Attach File"
-                  >
-                    <Plus className="w-6 h-6" />
-                  </button>
+            <div className="w-full px-4" style={{maxWidth:'680px'}}>
+              <input type="file" multiple accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
 
-                  <input
-                    type="text"
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    placeholder="Ask anything"
-                    disabled={generating}
-                    className="flex-1 bg-transparent border-none text-[var(--text-main)] placeholder-[var(--text-muted)] text-[16px] outline-none px-2 font-sans font-normal"
-                  />
+              {/* The exact pill input from the reference image */}
+              <form
+                onSubmit={handleSubmit}
+                style={{
+                  display:'flex', alignItems:'center',
+                  background:'var(--bg-input)',
+                  border:'1px solid var(--input-border)',
+                  borderRadius:'999px',
+                  padding:'10px 10px 10px 16px',
+                  boxShadow:'0 1px 6px rgba(0,0,0,0.06)',
+                  transition:'box-shadow 0.2s, border-color 0.2s',
+                  width:'100%',
+                }}
+              >
+                {/* + attach button */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{background:'none', border:'none', cursor:'pointer', padding:'4px', marginRight:'8px', color:'var(--text-main)', display:'flex', alignItems:'center', flexShrink:0}}
+                  title="Attach"
+                >
+                  <Plus style={{width:'20px', height:'20px'}} />
+                </button>
 
-                  <div className="flex items-center gap-1 shrink-0 mr-1">
-                    {settings.enableDictation !== false && !inputText.trim() && !generating && (
-                      <button
-                        type="button"
-                        onClick={toggleListening}
-                        className={`p-1.5 rounded-full transition cursor-pointer ${isListening ? 'text-red-500 animate-pulse' : 'text-[var(--text-secondary)] hover:text-[var(--text-main)]'}`}
-                        title={isListening ? "Stop listening" : "Voice input"}
-                      >
-                        <Mic className="w-5 h-5" />
-                      </button>
-                    )}
-
-                    <button
-                      type={generating ? "button" : "submit"}
-                      onClick={generating ? onStopGeneration : undefined}
-                      disabled={!inputText.trim() && !generating && !isListening}
-                      className={`w-[36px] h-[36px] rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                        generating 
-                          ? 'bg-red-500 text-white shadow-sm hover:bg-red-600'
-                          : inputText.trim() || isListening
-                            ? 'bg-[#007aff] text-white shadow-sm hover:bg-[#0062cc]'
-                            : 'bg-[#e0e0e0] text-[#a0a0a0] dark:bg-[#333] dark:text-[#666]'
-                      }`}
-                      title={generating ? "Stop generating" : "Send"}
-                    >
-                      {generating ? (
-                        <Square className="w-4 h-4 fill-current" />
-                      ) : (
-                        <Send className="w-4 h-4 transform -rotate-45 ml-0.5 mt-0.5" />
-                      )}
-                    </button>
+                {/* Image previews */}
+                {selectedImages.length > 0 && (
+                  <div className="flex gap-1.5 mr-2 overflow-x-auto no-scrollbar">
+                    {selectedImages.map((img, i) => (
+                      <div key={i} className="relative group/img shrink-0">
+                        <img src={img} alt="preview" style={{width:'28px', height:'28px', objectFit:'cover', borderRadius:'8px', border:'1px solid var(--border-color)'}} />
+                        <button type="button" onClick={() => removeImage(i)} style={{position:'absolute', top:'-4px', right:'-4px', background:'#ef4444', color:'white', borderRadius:'50%', border:'none', padding:'1px', cursor:'pointer', display:'flex', opacity:0}} className="group-hover/img:opacity-100 transition">
+                          <X style={{width:'10px', height:'10px'}} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                </form>
-                <div className="text-[12px] text-[var(--text-muted)] mt-3 mb-1">
-                  Offline AI can make mistakes. Check important info.
-                </div>
-              </div>
+                )}
 
-              {/* Suggestions row under input */}
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                {/* Text input */}
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder="Ask anything"
+                  disabled={generating}
+                  style={{flex:1, background:'transparent', border:'none', outline:'none', fontSize:'16px', color:'var(--text-main)', fontFamily:"'Inter', 'Segoe UI', sans-serif", padding:'2px 8px 2px 0'}}
+                />
+
+                {/* Mic button - always visible */}
                 <button
                   type="button"
-                  onClick={() => handleSuggestedPrompt("Write a custom WebGPU compute shader script to run element-wise addition of float32 arrays")}
-                  className="suggestion-pill"
+                  onClick={toggleListening}
+                  style={{background:'none', border:'none', cursor:'pointer', padding:'6px', color: isListening ? '#ef4444' : 'var(--text-secondary)', display:'flex', alignItems:'center', flexShrink:0, marginRight:'6px'}}
+                  title={isListening ? 'Stop listening' : 'Voice input'}
                 >
-                  <Brain className="w-4 h-4 text-[var(--text-secondary)]" />
-                  <span>Brainstorm shader script</span>
+                  <Mic style={{width:'22px', height:'22px'}} className={isListening ? 'animate-pulse' : ''} />
                 </button>
+
+                {/* Blue circle send button — exact match to reference */}
                 <button
-                  type="button"
-                  onClick={() => handleSuggestedPrompt("Write Fibonacci Memoized script in TypeScript")}
-                  className="suggestion-pill"
+                  type={generating ? 'button' : 'submit'}
+                  onClick={generating ? onStopGeneration : undefined}
+                  disabled={(!inputText.trim() && selectedImages.length === 0) && !generating && !isListening}
+                  style={{
+                    width:'40px', height:'40px', borderRadius:'50%',
+                    background: generating ? '#ef4444' : '#007aff',
+                    border:'none', cursor:'pointer',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    flexShrink:0, transition:'background 0.2s',
+                    opacity: (!inputText.trim() && selectedImages.length === 0 && !generating && !isListening) ? 0.45 : 1,
+                  }}
+                  title={generating ? 'Stop' : 'Send'}
                 >
-                  <Edit3 className="w-4 h-4 text-[var(--text-secondary)]" />
-                  <span>Write or edit</span>
+                  {generating
+                    ? <Square style={{width:'16px', height:'16px', fill:'white', color:'white'}} />
+                    : <Send style={{width:'16px', height:'16px', color:'white'}} />}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleSuggestedPrompt("Explain the architecture details of Llama 3.2 GGUF models running offline")}
-                  className="suggestion-pill"
-                >
-                  <Globe className="w-4 h-4 text-[var(--text-secondary)]" />
-                  <span>Look something up</span>
-                </button>
+              </form>
+
+              {/* Disclaimer */}
+              <p style={{textAlign:'center', marginTop:'12px', fontSize:'13px', color:'var(--text-muted)', fontFamily:"'Inter', 'Segoe UI', sans-serif"}}>
+                Offline AI can make mistakes. Check important info.
+              </p>
+
+
+              {/* Suggestion pills */}
+              <div style={{display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'8px', marginTop:'20px'}}>
+                <button type="button" onClick={() => handleSuggestedPrompt('Create an image of a futuristic city')} className="suggestion-pill"><ImageIcon style={{width:'14px', height:'14px'}} /> Create an image</button>
+                <button type="button" onClick={() => handleSuggestedPrompt('Write a Python script to sort a list of dictionaries by key')} className="suggestion-pill"><Edit3 style={{width:'14px', height:'14px'}} /> Write or edit</button>
+                <button type="button" onClick={() => handleSuggestedPrompt('Explain how the internet works simply')} className="suggestion-pill"><Globe style={{width:'14px', height:'14px'}} /> Look something up</button>
               </div>
+            </div>
           </div>
         ) : (
           /* Chat Feed */
-          <div className="max-w-2xl mx-auto space-y-6 py-6">
-            {messages.map((msg, index) => {
-              const isUser = msg.role === 'user';
-              const isEditing = editingMsgIndex === index;
+          <div className="max-w-2xl mx-auto space-y-6 py-6 px-4">
+            <AnimatePresence initial={false}>
+              {messages.map((msg, index) => {
+                const isUser = msg.role === 'user';
+                const isEditing = editingMsgIndex === index;
 
-              return (
-                <div 
-                  key={msg.id}
-                  className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
-                  id={`chat-msg-${msg.id}`}
-                >
+                return (
+                  <motion.div 
+                    key={msg.id}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                    className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
+                    id={`chat-msg-${msg.id}`}
+                  >
                   {isUser ? (
-                    /* User Bubble */
+                    /* User Bubble - ChatGPT style: light grey/blue pill */
                     <div className="flex flex-col items-end space-y-1.5 max-w-[80%] relative group">
-                      <div className="user-msg-bubble">
+                      <div style={{backgroundColor:'var(--user-bubble-bg)', color:'var(--user-bubble-text)', borderRadius:'18px', padding:'10px 16px', fontSize:'15px', lineHeight:'1.5', display:'inline-block', wordBreak:'break-word', maxWidth:'100%'}}>
                         {isEditing ? (
                           <div className="space-y-2 min-w-[200px]">
                             <textarea
@@ -594,7 +517,16 @@ export default function ChatContainer({
                             </div>
                           </div>
                         ) : (
-                          msg.content
+                          <div className="flex flex-col gap-2">
+                            {msg.content}
+                            {msg.images && msg.images.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {msg.images.map((img, i) => (
+                                  <img key={i} src={img} alt="Uploaded" className="max-w-[150px] max-h-[150px] rounded-lg border border-[var(--border-color)] object-cover" />
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                       
@@ -604,7 +536,7 @@ export default function ChatContainer({
                         <div className="flex items-center gap-1 mt-1 mr-1 text-[var(--text-muted)] opacity-60 hover:opacity-100 transition-opacity">
                           <button
                             type="button"
-                            onClick={(e) => handleCopyCode(msg.content, msg.id)}
+                            onClick={(e) => handleCopyCode(msg.content)}
                             className="p-1.5 hover:bg-[var(--bg-hover)] rounded-md transition cursor-pointer"
                             title="Copy text"
                           >
@@ -640,17 +572,97 @@ export default function ChatContainer({
                       {/* Message Contents */}
                       <div className="flex-1 space-y-3 pr-4 min-w-0">
                         {msg.isCodex && (
-                          <div className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold font-mono tracking-wider bg-indigo-500/10 text-indigo-500 uppercase select-none">
-                            Codex Optimized Response
+                          <div className="inline-flex items-center gap-1.5 px-2 py-1 mb-2 rounded-md border border-indigo-500/20 bg-indigo-500/10 text-[10px] font-bold font-mono tracking-wider text-indigo-400 uppercase select-none shadow-sm">
+                            <Code className="w-3 h-3" />
+                            Codex Optimized
                           </div>
                         )}
-                        <div className={`space-y-2 ${msg.isCodex ? 'font-mono text-[13.5px]' : ''}`}>
-                          {msg.content ? parseMessageContent(msg.content, msg.id) : (
-                            <div className="typing-bubble py-2">
-                              <span className="typing-dot animate-pulse" />
-                              <span className="typing-dot animate-pulse" />
-                              <span className="typing-dot animate-pulse" />
+                        <div className={`space-y-2 ${msg.isCodex ? 'font-mono text-[13.5px]' : ''} text-[15px] leading-relaxed text-[var(--text-main)] select-text font-normal`}>
+                          {/* Main Content */}
+                          {(!msg.content && generating && index === messages.length - 1) ? (
+                            <div className="flex items-center gap-1.5 py-2">
+                              <div className="flex gap-1 items-center bg-[var(--bg-hover)] px-3 py-2 rounded-full border border-[var(--border-color)]">
+                                <span className="w-1.5 h-1.5 bg-[var(--text-muted)] rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                <span className="w-1.5 h-1.5 bg-[var(--text-muted)] rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                <span className="w-1.5 h-1.5 bg-[var(--text-muted)] rounded-full animate-bounce"></span>
+                              </div>
                             </div>
+                          ) : msg.content && (
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                code({node, inline, className, children, ...props}: any) {
+                                  const match = /language-(\w+)/.exec(className || '');
+                                  const lang = match ? match[1] : '';
+                                  const codeString = String(children).replace(/\n$/, '');
+                                  
+                                  if (!inline) {
+                                    return (
+                                      <div className="my-4 border border-[var(--border-color)] rounded-xl bg-[var(--bg-hover)]/30 overflow-hidden shadow-sm font-mono w-full">
+                                        <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-hover)] text-[var(--text-muted)] border-b border-[var(--border-color)] text-[10px] font-mono select-none">
+                                          <span className="uppercase text-[var(--text-main)] tracking-wider font-semibold">{lang === 'ts' ? 'TYPESCRIPT' : lang === 'js' ? 'JAVASCRIPT' : lang || 'TEXT'}</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleCopyCode(codeString)}
+                                            className="flex items-center gap-1.5 hover:text-[var(--text-main)] transition cursor-pointer text-[var(--text-muted)]"
+                                            title="Copy codeblock"
+                                          >
+                                            {copiedText === codeString ? (
+                                              <>
+                                                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                                <span className="text-emerald-500 font-semibold font-sans">Copied</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Copy className="w-3.5 h-3.5" />
+                                                <span className="font-sans">Copy</span>
+                                              </>
+                                            )}
+                                          </button>
+                                        </div>
+                                        <div className="p-4 overflow-x-auto bg-[#1e1e1e] max-h-[420px] text-xs leading-relaxed text-[#d4d4d4] rounded-b-xl">
+                                          {generating ? (
+                                            <pre className="m-0 bg-transparent p-0 font-mono text-[13px] whitespace-pre-wrap word-break-all">
+                                              <code>{codeString}</code>
+                                            </pre>
+                                          ) : (
+                                            <SyntaxHighlighter
+                                              {...props}
+                                              style={vscDarkPlus}
+                                              language={lang}
+                                              PreTag="div"
+                                              customStyle={{ background: 'transparent', padding: 0, margin: 0 }}
+                                            >
+                                              {codeString}
+                                            </SyntaxHighlighter>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <code className={`${className} bg-[var(--bg-hover)] text-emerald-400 px-1.5 py-0.5 rounded text-[13px] font-mono`} {...props}>
+                                      {children}
+                                    </code>
+                                  );
+                                },
+                                p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                                ul: ({children}) => <ul className="list-disc pl-5 my-2 space-y-1">{children}</ul>,
+                                ol: ({children}) => <ol className="list-decimal pl-5 my-2 space-y-1">{children}</ol>,
+                                li: ({children}) => <li>{children}</li>,
+                                h1: ({children}) => <h1 className="text-xl font-bold mt-4 mb-2">{children}</h1>,
+                                h2: ({children}) => <h2 className="text-lg font-bold mt-4 mb-2">{children}</h2>,
+                                h3: ({children}) => <h3 className="text-base font-bold mt-3 mb-1">{children}</h3>,
+                                h4: ({children}) => <h4 className="text-sm font-bold mt-3 mb-1">{children}</h4>,
+                                a: ({href, children}) => <a href={href} target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline">{children}</a>,
+                                blockquote: ({children}) => <blockquote className="border-l-4 border-[var(--border-color)] pl-4 italic text-[var(--text-muted)] my-2">{children}</blockquote>,
+                                table: ({children}) => <div className="overflow-x-auto my-4"><table className="min-w-full divide-y divide-[var(--border-color)]">{children}</table></div>,
+                                th: ({children}) => <th className="px-3 py-2 text-left text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider bg-[var(--bg-hover)]/50">{children}</th>,
+                                td: ({children}) => <td className="px-3 py-2 whitespace-nowrap text-sm border-t border-[var(--border-color)]">{children}</td>,
+                              }}
+                            >
+                              {msg.content}
+                            </ReactMarkdown>
                           )}
                         </div>
  
@@ -660,13 +672,13 @@ export default function ChatContainer({
                             type="button"
                             onClick={(e) => {
                               navigator.clipboard.writeText(msg.content);
-                              setCopiedId(msg.id);
-                              setTimeout(() => setCopiedId(null), 2000);
+                              setCopiedText(msg.content);
+                              setTimeout(() => setCopiedText(null), 2000);
                             }}
                             className="p-1.5 hover:bg-[var(--bg-hover)] rounded-md hover:text-[var(--text-main)] transition cursor-pointer"
                             title="Copy"
                           >
-                            {copiedId === msg.id ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                            {copiedText === msg.content ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                           </button>
                           <button
                             type="button"
@@ -720,77 +732,105 @@ export default function ChatContainer({
                       </div>
                     </div>
                   )}
-                </div>
+                </motion.div>
               );
             })}
+            </AnimatePresence>
+            {/* Invisible div to scroll to bottom */}
+            <div ref={bottomRef} className="h-4" />
           </div>
         )}
-        </div>
-        <div ref={bottomRef} />
       </div>
 
-      {/* Persistent floating prompt tray at the bottom (only when chat is active) */}
+      {/* Persistent bottom input bar - exact ChatGPT replica when in chat */}
       {messages.length > 0 && (
-        <div className="p-4 bg-[var(--bg-main)] z-10 border-t border-transparent relative">
-          <div className="w-full max-w-3xl mx-auto flex flex-col items-center">
-            <form onSubmit={handleSubmit} className="w-full bg-[var(--bg-input)] border border-[var(--input-border)] rounded-full shadow-sm flex items-center px-2 py-1.5 transition hover:shadow focus-within:shadow">
-              <button
-                type="button"
-                onClick={() => alert("File attachments coming soon!")}
-                className="p-1.5 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-main)] transition cursor-pointer shrink-0 ml-1"
-                title="Attach File"
-              >
-                <Plus className="w-6 h-6" />
+        <div style={{padding:'20px 16px 16px', background:'transparent', zIndex:10, position:'relative'}}>
+          <input type="file" multiple accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
+          <div style={{maxWidth:'680px', margin:'0 auto'}}>
+            {/* Image previews */}
+            {selectedImages.length > 0 && (
+              <div className="flex gap-2 mb-2 no-scrollbar overflow-x-auto">
+                {selectedImages.map((img, i) => (
+                  <div key={i} className="relative group/img shrink-0">
+                    <img src={img} alt="preview" style={{width:'36px', height:'36px', objectFit:'cover', borderRadius:'8px', border:'1px solid var(--border-color)'}} />
+                    <button type="button" onClick={() => removeImage(i)} style={{position:'absolute', top:'-5px', right:'-5px', background:'#ef4444', color:'white', border:'none', borderRadius:'50%', width:'16px', height:'16px', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', opacity:0}} className="group-hover/img:opacity-100 transition">
+                      <X style={{width:'10px', height:'10px'}} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* The exact pill input */}
+            <form
+              onSubmit={handleSubmit}
+              style={{
+                display:'flex', alignItems:'center',
+                background:'var(--bg-input)',
+                border:'1px solid var(--input-border)',
+                borderRadius:'999px',
+                padding:'10px 10px 10px 16px',
+                boxShadow:'0 8px 30px rgba(0,0,0,0.12)',
+                transition:'box-shadow 0.2s, border-color 0.2s',
+                width:'100%',
+              }}
+            >
+              {/* + attach */}
+              <button type="button" onClick={() => fileInputRef.current?.click()} style={{background:'none', border:'none', cursor:'pointer', padding:'4px', marginRight:'8px', color:'var(--text-main)', display:'flex', alignItems:'center', flexShrink:0}} title="Attach Image">
+                <Plus style={{width:'20px', height:'20px'}} />
               </button>
 
+              {/* Text input */}
               <input
+                ref={inputRef}
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="Ask anything"
                 disabled={generating}
-                className="flex-1 bg-transparent border-none text-[var(--text-main)] placeholder-[var(--text-muted)] text-[16px] outline-none px-2 font-sans font-normal"
+                style={{flex:1, background:'transparent', border:'none', outline:'none', fontSize:'16px', color:'var(--text-main)', fontFamily:"'Inter', 'Segoe UI', sans-serif", padding:'2px 8px 2px 0'}}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !generating) { e.preventDefault(); handleSubmit(e as any); } }}
               />
 
-              <div className="flex items-center gap-1 shrink-0 mr-1">
-                {settings.enableDictation !== false && !inputText.trim() && !generating && (
-                  <button
-                    type="button"
-                    onClick={toggleListening}
-                    className={`p-1.5 rounded-full transition cursor-pointer ${isListening ? 'text-red-500 animate-pulse' : 'text-[var(--text-secondary)] hover:text-[var(--text-main)]'}`}
-                    title={isListening ? "Stop listening" : "Voice input"}
-                  >
-                    <Mic className="w-5 h-5" />
-                  </button>
-                )}
+              {/* Mic */}
+              <button
+                type="button"
+                onClick={toggleListening}
+                style={{background:'none', border:'none', cursor:'pointer', padding:'6px', color: isListening ? '#ef4444' : 'var(--text-secondary)', display:'flex', alignItems:'center', flexShrink:0, marginRight:'6px'}}
+                title={isListening ? 'Stop' : 'Voice'}
+              >
+                <Mic style={{width:'22px', height:'22px'}} className={isListening ? 'animate-pulse' : ''} />
+              </button>
 
-                <button
-                  type={generating ? "button" : "submit"}
-                  onClick={generating ? onStopGeneration : undefined}
-                  disabled={!inputText.trim() && !generating && !isListening}
-                  className={`w-[36px] h-[36px] rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                    generating 
-                      ? 'bg-red-500 text-white shadow-sm hover:bg-red-600'
-                      : inputText.trim() || isListening
-                        ? 'bg-[#007aff] text-white shadow-sm hover:bg-[#0062cc]'
-                        : 'bg-[#e0e0e0] text-[#a0a0a0] dark:bg-[#333] dark:text-[#666]'
-                  }`}
-                  title={generating ? "Stop generating" : "Send"}
-                >
-                  {generating ? (
-                    <Square className="w-4 h-4 fill-current" />
-                  ) : (
-                    <Send className="w-4 h-4 transform -rotate-45 ml-0.5 mt-0.5" />
-                  )}
-                </button>
-              </div>
+              {/* Blue circle send button */}
+              <button
+                type={generating ? 'button' : 'submit'}
+                onClick={generating ? onStopGeneration : undefined}
+                disabled={(!inputText.trim() && selectedImages.length === 0) && !generating && !isListening}
+                style={{
+                  width:'40px', height:'40px', borderRadius:'50%',
+                  background: generating ? '#ef4444' : '#007aff',
+                  border:'none', cursor:'pointer',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  flexShrink:0, transition:'background 0.2s',
+                  opacity: (!inputText.trim() && selectedImages.length === 0 && !generating && !isListening) ? 0.45 : 1,
+                }}
+                title={generating ? 'Stop' : 'Send'}
+              >
+                {generating
+                  ? <Square style={{width:'16px', height:'16px', fill:'white', color:'white'}} />
+                  : <Send style={{width:'16px', height:'16px', color:'white'}} />}
+              </button>
             </form>
-            <div className="text-[12px] text-[var(--text-muted)] mt-2">
+
+            {/* Disclaimer */}
+            <p style={{textAlign:'center', marginTop:'8px', fontSize:'12px', color:'var(--text-muted)'}}>
               Offline AI can make mistakes. Check important info.
-            </div>
+            </p>
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }

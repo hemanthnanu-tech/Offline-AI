@@ -31,6 +31,9 @@ export interface ChatMessage {
   timestamp: string;
   tokensPerSecond?: number;
   isCodex?: boolean;
+  images?: string[];
+  thoughtProcess?: string;
+  isThinking?: boolean;
 }
 
 export interface ChatSession {
@@ -73,7 +76,5 @@ export interface InferenceSettings {
   userName: string;
   userDob: string;
   userDetails: string;
-  geminiApiKey: string;
   useGPU: boolean;
 }
-

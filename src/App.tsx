@@ -51,6 +51,8 @@ export default function App() {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [isModelLoading, setIsModelLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -318,7 +320,7 @@ export default function App() {
     setSettings(prev => ({ ...prev, codexEnabled: !prev.codexEnabled }));
   };
 
-  const executeInference = async (promptText: string, updatedMessages: ChatMessage[]) => {
+  const executeInference = async (promptText: string, updatedMessages: ChatMessage[], images?: string[]) => {
     setGenerating(true);
 
     const controller = new AbortController();
@@ -359,44 +361,32 @@ export default function App() {
       finalSystemPrompt += `Address the user naturally. Use the above context to personalize your responses when relevant.`;
     }
 
+    const lastUserMsg = updatedMessages[updatedMessages.length - 1];
     try {
-      if (isGithubPages) {
-        // Browser/GitHub Mode: Use Gemini API directly if key is provided
-        if (!settings.geminiApiKey) {
-          throw new Error("No Gemini API Key provided. Please enter one in Settings to chat in Web Demo mode.");
-        }
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: updatedMessages,
+          temperature: settings.temperature
+        }),
+        signal: controller.signal
+      });
 
-        const startTime = Date.now();
-        let fullContent = "";
-
-        // Format history for Gemini
-        const contents = updatedMessages.map(msg => ({
-          role: msg.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: msg.content }]
-        }));
-
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${settings.geminiApiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: finalSystemPrompt }] },
-            contents,
-            generationConfig: {
-              temperature: settings.temperature,
-              topP: settings.topP,
-              maxOutputTokens: settings.maxTokens
-            }
-          }),
-          signal: controller.signal
-        });
-
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || "Gemini API Error. Check your API key.");
-        }
-
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: 'Backend error' }));
+        throw new Error(errData.error || `Backend returned status ${res.status}`);
+      }
+        
         const reader = res.body?.getReader();
         const decoder = new TextDecoder("utf-8");
+        
+        let streamingBuffer = "";
+        let isThinkingPhase = false;
+        let thoughtContent = "";
+        let finalContent = "";
+        
+        const startTime = Date.now();
         let tokenCount = 0;
 
         while (reader) {
@@ -408,82 +398,38 @@ export default function App() {
           
           for (const line of lines) {
             const trimmedLine = line.trim();
-            if (trimmedLine.startsWith("data: ") && trimmedLine !== "data: [DONE]") {
+            if (trimmedLine === "data: [DONE]") break;
+            if (trimmedLine.startsWith("data: ")) {
               try {
                 const data = JSON.parse(trimmedLine.substring(6));
-                const textChunk = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-                if (textChunk) {
-                  fullContent += textChunk;
-                  tokenCount++;
-                  
-                  const timeElapsed = (Date.now() - startTime) / 1000;
-                  const tps = timeElapsed > 0 ? tokenCount / timeElapsed : 0;
-                  
-                  setSessions(prev => prev.map(s => {
-                    if (s.id === activeSessionId) {
-                      const msgs = [...s.messages];
-                      const targetIdx = msgs.findIndex(m => m.id === responseId);
-                      if (targetIdx !== -1) {
-                        msgs[targetIdx] = { ...msgs[targetIdx], content: fullContent, tokensPerSecond: parseFloat(tps.toFixed(2)) };
-                      }
-                      return { ...s, messages: msgs };
-                    }
-                    return s;
-                  }));
+                if (data.error) {
+                  // Show error to user
+                  finalContent = `**Error**: ${data.error}`;
                 }
-              } catch (e) {
-                // Ignore split chunks
-              }
-            }
-          }
-        }
-      } else {
-        // Node.js Backend Route
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: updatedMessages,
-            systemPrompt: finalSystemPrompt,
-            temperature: settings.temperature
-          }),
-          signal: controller.signal
-        });
-
-        if (!res.ok) throw new Error("Failed to connect to backend");
-        
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder("utf-8");
-        
-        let fullContent = "";
-        const startTime = Date.now();
-        let tokenCount = 0;
-
-        while (reader) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          const chunkStr = decoder.decode(value, { stream: true });
-          const lines = chunkStr.split("\n");
-          
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (trimmedLine.startsWith("data: ") && trimmedLine !== "data: [DONE]") {
-              try {
-                const data = JSON.parse(trimmedLine.substring(6));
                 if (data.chunk) {
-                  fullContent += data.chunk;
                   tokenCount++;
-                  
                   const timeElapsed = (Date.now() - startTime) / 1000;
                   const tps = timeElapsed > 0 ? tokenCount / timeElapsed : 0;
                   
+                  streamingBuffer += data.chunk;
+                  finalContent += data.chunk;
+                  
+                  // Empty streaming buffer since we appended it directly to finalContent
+                  streamingBuffer = "";
+
                   setSessions(prev => prev.map(s => {
                     if (s.id === activeSessionId) {
                       const msgs = [...s.messages];
                       const targetIdx = msgs.findIndex(m => m.id === responseId);
                       if (targetIdx !== -1) {
-                        msgs[targetIdx] = { ...msgs[targetIdx], content: fullContent, tokensPerSecond: parseFloat(tps.toFixed(2)) };
+                        // Strip think tags aggressively to remove all internal thought outputs
+                        const displayContent = finalContent.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<think>[\s\S]*/g, '');
+
+                        msgs[targetIdx] = { 
+                          ...msgs[targetIdx], 
+                          content: displayContent, 
+                          tokensPerSecond: parseFloat(tps.toFixed(2)) 
+                        };
                       }
                       return { ...s, messages: msgs };
                     }
@@ -496,7 +442,6 @@ export default function App() {
             }
           }
         }
-      }
     } catch (err: any) {
       if (err.name === 'AbortError') {
         console.log("Inference aborted by user.");
@@ -508,7 +453,7 @@ export default function App() {
           const msgs = [...s.messages];
           const targetIdx = msgs.findIndex(m => m.id === responseId);
           if (targetIdx !== -1) {
-            msgs[targetIdx] = { ...msgs[targetIdx], content: "**Error**: Failed to generate offline response." };
+            msgs[targetIdx] = { ...msgs[targetIdx], content: `**Error**: ${err.message || "Failed to generate offline response."}` };
           }
           return { ...s, messages: msgs };
         }
@@ -520,13 +465,14 @@ export default function App() {
     }
   };
 
-  const handleSendMessage = (text: string) => {
+  const handleSendMessage = (text: string, images?: string[]) => {
     if (generating) return;
 
     const userMsg: ChatMessage = {
       id: `msg-user-${Date.now()}`,
       role: 'user',
       content: text,
+      images: images && images.length > 0 ? images : undefined,
       timestamp: new Date().toLocaleTimeString(),
     };
 
@@ -552,7 +498,7 @@ export default function App() {
       return s;
     }));
 
-    executeInference(text, updatedMessages);
+    executeInference(text, updatedMessages, images);
   };
 
   const handleRegenerate = () => {
@@ -614,10 +560,20 @@ export default function App() {
   };
 
   const handleLoadModel = async (fileName: string, silent: boolean = false) => {
+    if (!silent) {
+      const confirmLoad = window.confirm(`Are you sure you want to load the model: ${fileName}? This will unload the current model and may take a few moments.`);
+      if (!confirmLoad) return;
+    }
+
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     setGenerating(false);
+    
+    if (!silent) {
+      setIsModelLoading(true);
+    }
+    
     try {
       const res = await fetch('/api/load-model', {
         method: 'POST',
@@ -628,7 +584,7 @@ export default function App() {
       if (data.success && data.modelInfo) {
         setActiveModel(data.modelInfo);
         if (!silent) {
-          alert(`Successfully loaded GGUF model: ${data.modelInfo.name}`);
+          // Success handled silently or via a subtle toast if preferred.
         }
       } else {
         if (!silent) {
@@ -639,6 +595,10 @@ export default function App() {
       console.error(e);
       if (!silent) {
         alert("Error communicating with backend model loader.");
+      }
+    } finally {
+      if (!silent) {
+        setIsModelLoading(false);
       }
     }
   };
@@ -656,6 +616,17 @@ export default function App() {
   return (
     <div className={`h-screen w-screen flex transition-all relative overflow-hidden ${theme === 'dark' ? 'dark' : ''}`} id="app-root">
       
+      {/* Fullscreen Loading Overlay for Model Switching */}
+      {isModelLoading && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[var(--modal-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl p-8 flex flex-col items-center max-w-sm w-full mx-4 text-center">
+             <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mb-4" />
+             <h3 className="text-lg font-bold text-[var(--text-main)] mb-2">Loading Model...</h3>
+             <p className="text-sm text-[var(--text-muted)]">Please wait while the AI model is being loaded into memory. This may take up to a minute depending on hardware.</p>
+          </div>
+        </div>
+      )}
+
       {/* Dynamic theme colors layout */}
       <div className="flex w-full h-full overflow-hidden select-text relative z-10">
         {/* Left Side menu */}
@@ -709,24 +680,6 @@ export default function App() {
                   <span>{hardwareStats?.freeRam ? `${hardwareStats.freeRam} Free` : 'N/A'}</span>
                 </div>
               </div>
-              
-              {!isGithubPages && (
-                <button
-                  onClick={async () => {
-                    try {
-                      await fetch('/api/unload', { method: 'POST' });
-                      alert('Memory cleaned and model unloaded.');
-                      window.location.reload();
-                    } catch (e) {
-                      console.error(e);
-                    }
-                  }}
-                  className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-xl px-3 py-1.5 text-[11px] font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-                  title="Unload Model and Clean RAM"
-                >
-                  <Square className="w-3 h-3 fill-current" /> Clean RAM
-                </button>
-              )}
             </div>
           </div>
 
