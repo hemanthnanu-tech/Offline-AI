@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
-  Settings, Sparkles, Send, Brain, Edit3, Image as ImageIcon, Check, Download, AlertCircle, Copy, Mic, Square, CheckSquare, Plus, RefreshCw, ChevronDown, ChevronUp, Loader2, Trash2, ShieldAlert, Cpu, HardDrive, Volume2, VolumeX, ThumbsUp, ThumbsDown, Database, Terminal, Code, HelpCircle, Eye, EyeOff, LayoutGrid, Globe, X, MicOff, PanelLeftOpen, PanelLeftClose, User, Edit2, Quote, Menu, BookOpen
+  Settings, Sparkles, Send, Brain, Edit3, Image as ImageIcon, Check, Download, AlertCircle, Copy, Mic, Square, CheckSquare, Plus, RefreshCw, ChevronDown, ChevronUp, Loader2, Trash2, Cpu, HardDrive, Volume2, VolumeX, ThumbsUp, ThumbsDown, Database, Terminal, Code, HelpCircle, Eye, EyeOff, LayoutGrid, Globe, X, MicOff, PanelLeftOpen, PanelLeftClose, User, Edit2, Quote, Menu, BookOpen
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import toast from 'react-hot-toast';
