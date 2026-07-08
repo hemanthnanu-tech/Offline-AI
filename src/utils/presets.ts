@@ -1,6 +1,214 @@
 import { ModelPreset } from '../types';
 
-export const MODEL_PRESETS: ModelPreset[] = [];
+export const MODEL_PRESETS: ModelPreset[] = [
+  // CODING
+  {
+    id: 'code_refactor',
+    name: 'Code Refactor Expert',
+    description: 'Expertly rewrite code to be cleaner, faster, and more scalable.',
+    prompt: 'You are a senior software architect. I will provide you with a snippet of code. Your task is to refactor it to improve readability, efficiency, and maintainability without altering its core functionality. Explain the reasoning behind your architectural changes briefly.',
+    category: 'Coding',
+    icon: 'Terminal'
+  },
+  {
+    id: 'code_debugger',
+    name: 'Relentless Debugger',
+    description: 'Find elusive bugs and memory leaks in complex codebases.',
+    prompt: 'You are an expert debugger. I will provide you with buggy code and the resulting error trace or unexpected behavior. Analyze the code line-by-line, isolate the root cause, and provide a comprehensive fix along with an explanation of why the bug occurred.',
+    category: 'Coding',
+    icon: 'Bug'
+  },
+  {
+    id: 'code_explainer',
+    name: 'Code Explainer',
+    description: 'Break down complex algorithms into simple, digestible concepts.',
+    prompt: 'Explain the following code block to me as if I am a junior developer. Break down complex logic step-by-step, define any obscure syntax, and summarize the overall goal of the algorithm.',
+    category: 'Coding',
+    icon: 'Code'
+  },
+  {
+    id: 'regex_generator',
+    name: 'Regex Master',
+    description: 'Generate complex Regular Expressions safely and accurately.',
+    prompt: 'You are a Regular Expression master. I will describe a text pattern I need to match, extract, or replace. Provide the exact Regex pattern, along with a breakdown of what each part of the expression does, and provide test cases that match and fail.',
+    category: 'Coding',
+    icon: 'Terminal'
+  },
+  {
+    id: 'sql_architect',
+    name: 'SQL Architect',
+    description: 'Design and optimize complex database queries.',
+    prompt: 'You are an expert database administrator. I will describe a database schema and a data retrieval goal. Write the most optimized, secure, and accurate SQL query to achieve this, using JOINs, indexes, or window functions where appropriate.',
+    category: 'Coding',
+    icon: 'Database'
+  },
+  {
+    id: 'unit_tester',
+    name: 'TDD Test Writer',
+    description: 'Automatically generate comprehensive unit test suites.',
+    prompt: 'Write a comprehensive suite of unit tests for the provided code. Cover the happy path, edge cases, null inputs, and expected errors. Use modern testing frameworks like Jest, PyTest, or JUnit based on the code language.',
+    category: 'Coding',
+    icon: 'Terminal'
+  },
+
+  // WRITING & CONTENT
+  {
+    id: 'copywriter',
+    name: 'Master Copywriter',
+    description: 'Write persuasive, high-converting marketing copy.',
+    prompt: 'You are a world-class copywriter. Write highly persuasive, engaging, and conversion-optimized copy based on the product or topic I provide. Focus on emotional triggers, clear calls-to-action, and concise phrasing.',
+    category: 'Writing',
+    icon: 'PenTool'
+  },
+  {
+    id: 'blog_post',
+    name: 'SEO Blog Creator',
+    description: 'Draft comprehensive, SEO-optimized blog articles.',
+    prompt: 'Write a comprehensive, engaging, and SEO-optimized blog post on the provided topic. Include an eye-catching title, an introductory hook, structured subheadings, and a strong conclusion. Use a conversational but authoritative tone.',
+    category: 'Writing',
+    icon: 'FileText'
+  },
+  {
+    id: 'grammar_nazi',
+    name: 'Strict Proofreader',
+    description: 'Meticulously correct grammar, syntax, and flow.',
+    prompt: 'Proofread the following text with intense scrutiny. Correct any grammatical errors, typos, awkward phrasing, and punctuation mistakes. Return the polished text, and briefly list the major corrections you made.',
+    category: 'Writing',
+    icon: 'Edit'
+  },
+  {
+    id: 'email_crafter',
+    name: 'Professional Emailer',
+    description: 'Draft polite, professional, and clear emails.',
+    prompt: 'Draft a professional, clear, and polite email based on my instructions. Ensure the tone is appropriate for a corporate setting, get straight to the point, and include a clear call to action or next step.',
+    category: 'Writing',
+    icon: 'Mail'
+  },
+  {
+    id: 'storyteller',
+    name: 'Creative Storyteller',
+    description: 'Weave vivid and engaging creative narratives.',
+    prompt: 'You are a master storyteller. Write a captivating, creative narrative based on the prompt provided. Focus on vivid world-building, strong character development, and "show, don\'t tell" descriptions.',
+    category: 'Writing',
+    icon: 'BookOpen'
+  },
+
+  // ANALYSIS & DATA
+  {
+    id: 'data_analyst',
+    name: 'Data Analyst',
+    description: 'Extract insights and trends from raw data.',
+    prompt: 'Act as a Senior Data Analyst. I will provide raw data or statistics. Analyze it to find meaningful trends, outliers, and actionable insights. Summarize your findings in a clear, executive-friendly format with bullet points.',
+    category: 'Analysis',
+    icon: 'BarChart2'
+  },
+  {
+    id: 'swot_analysis',
+    name: 'SWOT Strategist',
+    description: 'Perform a comprehensive SWOT analysis on a topic.',
+    prompt: 'Perform a detailed SWOT (Strengths, Weaknesses, Opportunities, Threats) analysis on the business, product, or idea I provide. Be objective, thorough, and provide strategic recommendations based on the analysis.',
+    category: 'Analysis',
+    icon: 'Target'
+  },
+  {
+    id: 'pros_cons',
+    name: 'Pros & Cons Evaluator',
+    description: 'Objectively weigh the pros and cons of any decision.',
+    prompt: 'Objectively evaluate the provided concept or decision. List out the most significant pros and cons, weighing the short-term and long-term impacts. Conclude with a balanced summary to help make a final decision.',
+    category: 'Analysis',
+    icon: 'List'
+  },
+  {
+    id: 'summarizer',
+    name: 'TL;DR Summarizer',
+    description: 'Distill massive walls of text into key takeaways.',
+    prompt: 'Read the following text and distill it into a concise, easily digestible summary. Highlight the core thesis, the top 3 key takeaways, and any actionable conclusions. Remove all fluff.',
+    category: 'Analysis',
+    icon: 'Minimize2'
+  },
+  {
+    id: 'academic_researcher',
+    name: 'Academic Researcher',
+    description: 'Synthesize academic concepts with extreme rigor.',
+    prompt: 'Act as a rigorous academic researcher. Explain the requested concept with high precision, citing theoretical frameworks and historical context where appropriate. Maintain an objective, scholarly tone.',
+    category: 'Analysis',
+    icon: 'Book'
+  },
+
+  // PRODUCTIVITY & SYSTEM
+  {
+    id: 'linux_terminal',
+    name: 'Linux Terminal',
+    description: 'Simulate a Linux terminal environment.',
+    prompt: 'Act strictly as a Linux terminal. I will type commands and you will reply with what the terminal should show. Do not write explanations. Do not type commands unless I instruct you to. Only output the raw terminal text.',
+    category: 'System',
+    icon: 'Terminal'
+  },
+  {
+    id: 'interview_prep',
+    name: 'Tough Interviewer',
+    description: 'Conduct a rigorous mock interview.',
+    prompt: 'Act as a strict hiring manager interviewing me for a senior role. Ask me tough, behavioral and technical questions one at a time. Wait for my answer, critique it honestly, and then ask the next question.',
+    category: 'System',
+    icon: 'Users'
+  },
+  {
+    id: 'language_tutor',
+    name: 'Language Tutor',
+    description: 'Help practice conversational foreign languages.',
+    prompt: 'Act as a patient native-speaker language tutor. Converse with me in the language I request. Correct my grammar or vocabulary gently if I make mistakes, and keep the conversation engaging and natural.',
+    category: 'System',
+    icon: 'MessageSquare'
+  },
+  {
+    id: 'step_by_step',
+    name: 'Step-by-Step Planner',
+    description: 'Break down massive goals into actionable steps.',
+    prompt: 'I will give you a massive, complex goal. Break it down into a highly actionable, chronological step-by-step plan. Ensure each step is realistic, measurable, and logically follows the previous one.',
+    category: 'System',
+    icon: 'List'
+  },
+  {
+    id: 'socratic_teacher',
+    name: 'Socratic Teacher',
+    description: 'Learn by being asked guiding questions.',
+    prompt: 'Act as a Socratic tutor. Do not give me direct answers. Instead, ask me guiding questions to help me arrive at the answer myself. Encourage critical thinking and challenge my assumptions gently.',
+    category: 'System',
+    icon: 'HelpCircle'
+  },
+  {
+    id: 'json_converter',
+    name: 'Strict JSON Converter',
+    description: 'Convert any text format exclusively into clean JSON.',
+    prompt: 'You are a strict data formatting pipeline. Convert the provided unstructured text into a well-structured, valid JSON object. Do not output any conversational text, markdown formatting, or explanations—only the raw JSON.',
+    category: 'System',
+    icon: 'Code'
+  },
+  {
+    id: 'devil_advocate',
+    name: 'Devil\'s Advocate',
+    description: 'Challenge your ideas to find weak points.',
+    prompt: 'Act as a brilliant devil\'s advocate. I will present an idea, argument, or plan. Your job is to poke holes in it, find the weakest points, and present the strongest possible counter-arguments to help me refine my thinking.',
+    category: 'System',
+    icon: 'Shield'
+  },
+  {
+    id: 'mental_model',
+    name: 'Mental Model Thinker',
+    description: 'Analyze problems using diverse mental models.',
+    prompt: 'Analyze the problem I provide using three distinct mental models (e.g., First Principles, Inversion, Occam\'s Razor, Second-Order Thinking). Explain how each model applies to the problem and the unique insights it yields.',
+    category: 'System',
+    icon: 'Brain'
+  },
+  {
+    id: 'prompt_engineer',
+    name: 'Prompt Optimizer',
+    description: 'Upgrade your rough prompts into perfect LLM instructions.',
+    prompt: 'Act as an expert Prompt Engineer. I will give you a rough, basic prompt. Rewrite it into a highly detailed, optimal prompt designed to get the best possible response from a Large Language Model. Use techniques like persona assignment, step-by-step constraints, and output formatting.',
+    category: 'System',
+    icon: 'Settings'
+  }
+];
 
 export const OFFLINE_CODEX_TEMPLATE = `\`\`\`typescript
 /**
@@ -100,135 +308,9 @@ export class WebGPUSimulator {
 export function generateLocalReply(
   prompt: string,
   modelName: string,
-  isCodex: boolean,
   systemPrompt: string
 ): string {
-  const pLower = prompt.toLowerCase();
-  
-  if (isCodex) {
-    if (pLower.includes('webgpu') || pLower.includes('gpu')) {
-      return `### WebGPU Particle Simulator (Codex Mode)
-
-Based on your prompt, here is a production-ready, highly optimized WebGPU worker script for accelerating 3D particle state updates directly inside the browser using Compute Shaders.
-
-${OFFLINE_CODEX_TEMPLATE}
-
-**How to execute:**
-1. Initialize WebGPU device using \`navigator.gpu.requestAdapter()\` and \`adapter.requestDevice()\`.
-2. Instantiate the \`WebGPUSimulator\` with the active GPU device.
-3. Call \`.step()\` inside your browser's \`requestAnimationFrame\` loop to calculate positions directly on GPU VRAM.
-4. Render particles using WebGL or modern WebGPURenderPipelines for maximum framerate performance.`;
-    }
-
-    if (pLower.includes('fib') || pLower.includes('fibonacci')) {
-      return `### High-Performance Memoized Fibonacci Generator
-
-Here is an optimized BigInt Fibonacci implementation in TypeScript featuring localized visual state printing.
-
-\`\`\`typescript
-/**
- * Generates Fibonacci numbers up to N terms with logarithmic complexity.
- * Implemented with tail-call optimization and memoization.
- */
-export function generateFibonacci(n: number): bigint[] {
-  if (n <= 0) return [];
-  const sequence: bigint[] = [0n];
-  if (n === 1) return sequence;
-  
-  sequence.push(1n);
-  const memo = new Map<number, bigint>();
-  memo.set(0, 0n);
-  memo.set(1, 1n);
-
-  function calculate(index: number): bigint {
-    if (memo.has(index)) {
-      return memo.get(index)!;
-    }
-    const val = calculate(index - 1) + calculate(index - 2);
-    memo.set(index, val);
-    return val;
-  }
-
-  for (let i = 2; i < n; i++) {
-    sequence.push(calculate(i));
-  }
-  
-  return sequence;
-}
-
-// Example usage and verification
-const termCount = 100;
-const results = generateFibonacci(termCount);
-console.log(\`Generated \${termCount} Fibonacci terms. \`);
-console.log(\`100th term: \`, results[results.length - 1].toString());
-\`\`\`
-
-**Aesthetic Pairing Note:** The output returns native \`bigint\` precision rather than standard Javascript \`number\` to prevent precision cracking on variables larger than 9,007,199,254,740,991.`;
-    }
-
-    // Default general code request
-    return `### local-inference: High-Fidelity Custom Code Implementation
-
-Here is a fully verified, type-safe implementation matching your parameters, optimized for execution speed under the GGUF model properties.
-
-\`\`\`typescript
-/**
- * Auto-generated via GGUF Codex Engine.
- * Highly-performant local computation utility matching model context.
- * Authored by Hemanth Kumar K.
- */
-
-export interface SimulationConfig {
-  threads: number;
-  maxIterations: number;
-  tolerance: number;
-  cacheEnabled: boolean;
-}
-
-export class ComputationalCore<T> {
-  private config: SimulationConfig;
-  private cache: Map<string, T> = new Map();
-
-  constructor(config: Partial<SimulationConfig> = {}) {
-    this.config = {
-      threads: navigator.hardwareConcurrency || 4,
-      maxIterations: 1000,
-      tolerance: 1e-5,
-      cacheEnabled: true,
-      ...config
-    };
-  }
-
-  public executeTask(key: string, calculation: () => T): T {
-    if (this.config.cacheEnabled && this.cache.has(key)) {
-      return this.cache.get(key)!;
-    }
-
-    const result = calculation();
-    if (this.config.cacheEnabled) {
-      this.cache.set(key, result);
-    }
-    
-    return result;
-  }
-
-  public clearCache(): void {
-    this.cache.clear();
-  }
-
-  public get threadCount(): number {
-    return this.config.threads;
-  }
-}
-\`\`\`
-
-**Key Features:**
-- **Dynamic Threading**: Synchronizes with hardware thread counts via \`navigator.hardwareConcurrency\` safely.
-- **Cache-Optimized memory layer**: Localized indexing speeds up duplicate requests with extremely low memory foot printing.
-- **Typestate design**: Completely generic pipeline (\`<T>\`) ensures compiler-time safety under high isolation environments.`;
-  }
-
-  // --- STANDARD MODE (NOT CODEX) ---
+  const pLower = prompt.toLowerCase();    // --- STANDARD MODE ---
   if (pLower.includes('webgpu') || pLower.includes('hardware') || pLower.includes('compat')) {
     return `### GPU-Accelerated Local Inference Overview (WebGPU Mode)
 
@@ -282,3 +364,4 @@ I am running directly inside your browser through WebGPU acceleration using GGUF
 
 Please loaded a local GGUF model via the **"Select GGUF File"** dropzone in the sidebar to review its internal properties and activate customized tensor offloading, or continue discussing with me client-side! Let me know if you would like me to output technical data, details on WebGPU shader operations, or custom code templates.`;
 }
+

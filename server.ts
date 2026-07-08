@@ -5,28 +5,71 @@ import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import os from "os";
 import { spawn, ChildProcess } from "child_process";
+import compression from "compression";
 
 // Load environment variables
 dotenv.config();
+
+// Structured logging helper
+const logger = {
+  info: (msg: string) => console.log(`[${new Date().toISOString()}] [INFO] ${msg}`),
+  warn: (msg: string) => console.warn(`[${new Date().toISOString()}] [WARN] ${msg}`),
+  error: (msg: string, err?: any) => console.error(`[${new Date().toISOString()}] [ERROR] ${msg}`, err || ''),
+};
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Body parsers
-  app.use(express.json({ limit: '500mb' }));
-  app.use(express.urlencoded({ limit: '500mb', extended: true }));
+  // Security Headers
+  app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    next();
+  });
+
+  // CORS for localhost origins
+  app.use((req, res, next) => {
+    const origin = req.headers.origin || '';
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    }
+    if (req.method === 'OPTIONS') { res.sendStatus(204); return; }
+    next();
+  });
+
+  // Compression - bypass for SSE routes
+  app.use(compression({
+    filter: (req, res) => {
+      if (req.headers['x-no-compression'] || req.path === '/api/chat') {
+        return false;
+      }
+      return compression.filter(req, res);
+    }
+  }));
+
+  // Body parsers with payload limits
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
   // Child process for llama-server
   let llamaProcess: ChildProcess | null = null;
   let detectedModelInfo: any = null;
   let hasVisionSupport = false;
   let isModelLoaded = false;
+  let isChatProcessing = false; // Concurrency lock
   
   async function stopLlamaServer() {
     if (llamaProcess) {
-      console.log("Stopping existing llama-server process...");
-      llamaProcess.kill();
+      logger.info("Stopping existing llama-server process...");
+      if (os.platform() === "win32" && llamaProcess.pid) {
+        spawn("taskkill", ["/pid", llamaProcess.pid.toString(), "/f", "/t"]);
+      } else {
+        llamaProcess.kill("SIGKILL");
+      }
       llamaProcess = null;
       isModelLoaded = false;
       // Wait a moment for the port to be freed
@@ -36,13 +79,13 @@ async function startServer() {
 
   // Graceful shutdown handlers
   process.on('SIGINT', async () => {
-    console.log('SIGINT received. Shutting down...');
+    logger.warn('SIGINT received. Shutting down gracefully...');
     await stopLlamaServer();
     process.exit(0);
   });
   
   process.on('SIGTERM', async () => {
-    console.log('SIGTERM received. Shutting down...');
+    logger.warn('SIGTERM received. Shutting down gracefully...');
     await stopLlamaServer();
     process.exit(0);
   });
@@ -50,7 +93,7 @@ async function startServer() {
   async function loadGgufModel(specificFileName?: string) {
     await stopLlamaServer();
 
-    console.log("Scanning models directory... ");
+    logger.info("Scanning models directory...");
     try {
       const modelsDir = path.join(process.cwd(), "models");
       await fs.mkdir(modelsDir, { recursive: true });
@@ -64,7 +107,7 @@ async function startServer() {
         const stat = await fs.stat(modelPath);
         const sizeGB = (stat.size / (1024 * 1024 * 1024)).toFixed(2);
         
-        console.log(`Found GGUF model: ${ggufFile} (${sizeGB} GB). Spawning llama-server...`);
+        logger.info(`Found GGUF model: ${ggufFile} (${sizeGB} GB). Spawning llama-server...`);
         
         // Determine executable name based on platform
         const exeName = process.platform === "win32" ? "llama-bin/llama-server.exe" : "llama-server";
@@ -73,7 +116,8 @@ async function startServer() {
           "-m", modelPath,
           "--port", "8080",
           "--host", "127.0.0.1",
-          "-c", "8192" // Context window
+          "-c", "8192", // Context window
+          "--no-warmup" // Prevent heap corruption during empty warmup
         ];
 
         if (mmprojFile) {
@@ -114,24 +158,49 @@ async function startServer() {
           isModelLoaded = false;
         });
 
-        // Wait up to 10 seconds for the server to report it's ready
+        // Wait up to 10 seconds for the server to report it's ready via stdout/stderr string match
         let attempts = 0;
         while (!isModelLoaded && attempts < 20) {
           await new Promise(r => setTimeout(r, 500));
           attempts++;
         }
 
+        // Fallback: poll http://127.0.0.1:8080/health every 500ms up to 60 attempts
         if (!isModelLoaded) {
-           console.log("⚠️ llama-server took too long to start. It may still be loading.");
+          console.log("⚠️ String match did not fire — falling back to HTTP health polling...");
+          let pollAttempts = 0;
+          while (!isModelLoaded && pollAttempts < 60) {
+            await new Promise(r => setTimeout(r, 500));
+            try {
+              const healthRes = await fetch('http://127.0.0.1:8080/health');
+              if (healthRes.ok) {
+                isModelLoaded = true;
+                console.log("✅ llama-server confirmed ready via HTTP health poll");
+              }
+            } catch {
+              // not ready yet — keep polling
+            }
+            pollAttempts++;
+          }
         }
-        
+
+        if (!isModelLoaded) {
+          console.log("⚠️ llama-server took too long to start. It may still be loading.");
+        }
+
+        // Proper quantization detection via regex
+        const quantMatch = ggufFile.match(/[Qq](\d+)[_]?([A-Za-z0-9]*)/);
+        const quantization = quantMatch
+          ? `Q${quantMatch[1]}${quantMatch[2] ? '_' + quantMatch[2].toUpperCase() : ''}`
+          : 'F16';
+
         detectedModelInfo = {
           name: ggufFile.replace(".gguf", "").replace(/[-_]/g, " "),
           fileName: ggufFile,
           architecture: "llama-server",
           contextLength: 8192,
           fileSize: `${sizeGB} GB`,
-          quantization: ggufFile.toUpperCase().includes("Q4") ? "Q4_K_M" : "Dynamic"
+          quantization
         };
         return true;
       } else {
@@ -150,14 +219,42 @@ async function startServer() {
   await loadGgufModel();
 
   // API endpoints
+
+  // Merged /api/health endpoint (was duplicated — now single authoritative definition)
   app.get("/api/health", (req, res) => {
+    const memUsage = process.memoryUsage();
     res.json({
-      status: "healthy",
+      status: 'healthy',
       timestamp: new Date().toISOString(),
-      engine: "llama-server",
+      engine: 'llama-server',
       modelLoaded: isModelLoaded,
-      modelInfo: detectedModelInfo
+      hasVisionSupport,
+      modelInfo: detectedModelInfo,
+      systemMemory: {
+        rss: `${(memUsage.rss / 1024 / 1024).toFixed(2)} MB`,
+        heapTotal: `${(memUsage.heapTotal / 1024 / 1024).toFixed(2)} MB`,
+        heapUsed: `${(memUsage.heapUsed / 1024 / 1024).toFixed(2)} MB`
+      }
     });
+  });
+
+  // Proxy /api/slots to llama-server
+  app.get("/api/slots", async (req, res) => {
+    try {
+      const slotsRes = await fetch('http://127.0.0.1:8080/slots');
+      const data = await slotsRes.json();
+      res.json(data);
+    } catch {
+      res.json({ value: [] });
+    }
+  });
+
+  // Removed test stream
+
+  // Abort current chat processing
+  app.post('/api/stop', (req, res) => {
+    isChatProcessing = false;
+    res.json({ success: true });
   });
 
   app.get("/api/models", async (req, res) => {
@@ -166,7 +263,14 @@ async function startServer() {
       await fs.mkdir(modelsDir, { recursive: true });
       const files = await fs.readdir(modelsDir);
       const ggufFiles = files.filter(file => file.endsWith(".gguf"));
-      res.json({ models: ggufFiles });
+      
+      const modelDetails = [];
+      for (const file of ggufFiles) {
+        const stat = await fs.stat(path.join(modelsDir, file));
+        modelDetails.push({ name: file, sizeBytes: stat.size });
+      }
+      
+      res.json({ models: ggufFiles, modelDetails });
     } catch (e) {
       res.status(500).json({ error: "Failed to read models directory" });
     }
@@ -210,16 +314,15 @@ async function startServer() {
     });
   });
 
-  app.post("/api/unload", async (req, res) => {
-    console.log("Unloading model to free RAM...");
-    await stopLlamaServer();
-    detectedModelInfo = null;
-    res.json({ success: true });
-  });
-
+  // --- Chat Completion Proxy ---
   app.post("/api/chat", async (req, res) => {
     if (!llamaProcess) {
-      res.status(503).json({ error: "Model server is not running." });
+      res.status(502).json({ error: "Model server is offline. Please load a model first." });
+      return;
+    }
+
+    if (isChatProcessing) {
+      res.status(429).json({ error: "Server is busy processing another request." });
       return;
     }
 
@@ -235,21 +338,36 @@ async function startServer() {
       return;
     }
 
-    const { messages, temperature, thinkMode } = req.body;
+    isChatProcessing = true;
+    const { messages, temperature, topP, topK, maxTokens, thinkMode } = req.body;
     
     // Set headers for Server-Sent Events (SSE)
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no"); // Disable nginx/proxy buffering
+    
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      logger.warn("Chat request timed out after 120s.");
+      abortController.abort();
+    }, 120000); // 2 minute absolute timeout
+
+    req.on("aborted", () => {
+      logger.info("Client aborted connection. Aborting generation...");
+      abortController.abort();
+      isChatProcessing = false;
+    });
 
     try {
-      // Removed hard block for hasVisionSupport to allow single-file multimodal models like Gemma 3
       // Map format to OpenAI
       const openAiMessages: any[] = [];
       
       for (let i = 0; i < messages.length; i++) {
         const msg = messages[i];
-        if (msg.role === "user") {
+        if (msg.role === "system") {
+          openAiMessages.push({ role: "system", content: msg.content });
+        } else if (msg.role === "user") {
           if (msg.images && msg.images.length > 0) {
             openAiMessages.push({
               role: "user",
@@ -262,111 +380,124 @@ async function startServer() {
             openAiMessages.push({ role: "user", content: msg.content });
           }
         } else if (msg.role === "assistant") {
-          // Only send the final content (not the thought process) back to the model for history
           openAiMessages.push({ role: "assistant", content: msg.content || "" });
         }
       }
 
-      const proxyRes = await fetch("http://127.0.0.1:8080/v1/chat/completions", {
+      const response = await fetch("http://127.0.0.1:8080/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
           model: "local-model",
           messages: openAiMessages,
           stream: true,
-          temperature: temperature || 0.7,
+          temperature: temperature ?? 0.7,
+          top_p: topP ?? 0.9,
+          top_k: topK ?? 40,
+          max_tokens: maxTokens ?? 2048,
+          stream_options: { include_usage: true }
         })
       });
 
-      if (!proxyRes.ok) {
-        let errorText = await proxyRes.text();
-        try {
-          const parsed = JSON.parse(errorText);
-          errorText = parsed.error?.message || errorText;
-        } catch(e) {}
-        
-        res.write(`data: ${JSON.stringify({ chunk: `\n\n⚠️ **Model Error:** ${errorText}\n\n*(Note: If you tried to send an image to a text-only model, it will reject it.)*` })}\n\n`);
-        res.write(`data: [DONE]\n\n`);
+      // If response not ok, fetch body and return
+      if (!response.ok) {
+        clearTimeout(timeoutId);
+        const text = await response.text();
+        logger.error(`Llama server error: ${response.status}`, text);
+        res.write(`data: ${JSON.stringify({ error: `Llama.cpp Error: ${response.statusText}` })}\n\n`);
         res.end();
+        isChatProcessing = false;
         return;
       }
 
-      const reader = proxyRes.body?.getReader();
-      const decoder = new TextDecoder("utf-8");
-      
-      let buffer = "";
-      let thinkStartTime: number | null = null;
-      let thinkTokenCount = 0;
-      let inThinkBlock = false;
-      let thinkTimedOut = false;
-      const THINK_TIMEOUT_MS = 15000; // 15 seconds max thinking
+      if (!response.body) {
+        clearTimeout(timeoutId);
+        res.end();
+        isChatProcessing = false;
+        return;
+      }
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          buffer += decoder.decode(value, { stream: true });
-          
-          let newlineIdx;
-          while ((newlineIdx = buffer.indexOf('\n')) >= 0) {
-            const line = buffer.slice(0, newlineIdx).trim();
-            buffer = buffer.slice(newlineIdx + 1);
-            
-            if (line === "data: [DONE]") {
-              break;
-            }
-            
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.substring(6));
-                const contentChunk = data.choices?.[0]?.delta?.content || "";
-                if (contentChunk) {
-                  // Track thinking phase timing
-                  if (contentChunk.includes("<think>")) {
-                    inThinkBlock = true;
-                    thinkStartTime = Date.now();
-                  }
-                  
-                  if (inThinkBlock && thinkStartTime) {
-                    thinkTokenCount++;
-                    const elapsed = Date.now() - thinkStartTime;
-                    if (elapsed > THINK_TIMEOUT_MS && !thinkTimedOut) {
-                      thinkTimedOut = true;
-                      // Inject closing tag and move on
-                      res.write(`data: ${JSON.stringify({ chunk: "\n\n[Thought process truncated after 15s]\n</think>\n" })}\n\n`);
-                      inThinkBlock = false;
-                      continue;
-                    }
-                  }
-                  
-                  if (contentChunk.includes("</think>")) {
-                    inThinkBlock = false;
-                  }
-                  
-                  if (!thinkTimedOut || !inThinkBlock) {
-                    res.write(`data: ${JSON.stringify({ chunk: contentChunk })}\n\n`);
-                  }
-                }
-              } catch (e) {
-                // Ignore incomplete JSON
-              }
-            }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      
+      let done = false;
+      let chunkCount = 0;
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          chunkCount++;
+          const chunk = decoder.decode(value, { stream: true });
+          // logger.info(`Received chunk ${chunkCount}: ${chunk.substring(0, 30)}...`);
+          res.write(chunk);
+          // Explicitly flush the compression buffer so chunks stream instantly
+          if (typeof (res as any).flush === 'function') {
+            (res as any).flush();
           }
         }
       }
-
-      res.write(`data: [DONE]\n\n`);
+      logger.info(`Stream finished. Total chunks: ${chunkCount}`);
+      clearTimeout(timeoutId);
       res.end();
-    } catch (error: any) {
-      console.error("Chat generation error:", error);
-      if (!res.headersSent) {
-        res.status(500).json({ error: error.message || "Failed to connect to llama-server" });
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        // User stopped generation — end stream cleanly without error message
+        if (!res.writableEnded) res.end();
       } else {
-        res.write(`data: ${JSON.stringify({ error: "Stream failed" })}\n\n`);
-        res.end();
+        logger.error("Error proxying chat to llama-server", err);
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ error: err.message || "Failed to communicate with local model." })}\n\n`);
+          res.end();
+        }
+      }
+    } finally {
+      isChatProcessing = false;
+    }
+  });
+
+  app.post("/api/unload", async (req, res) => {
+    logger.info("Unloading model...");
+    if (llamaProcess) {
+      if (os.platform() === "win32") {
+        spawn("taskkill", ["/pid", llamaProcess.pid.toString(), "/f", "/t"]);
+      } else {
+        llamaProcess.kill("SIGKILL");
+      }
+      llamaProcess = null;
+    }
+    isModelLoaded = false;
+    res.json({ success: true });
+  });
+
+  app.post("/api/kill-model", async (req, res) => {
+    logger.warn("KILLING MODEL via hardware controls...");
+    if (llamaProcess) {
+      if (os.platform() === "win32") {
+        spawn("taskkill", ["/pid", llamaProcess.pid.toString(), "/f", "/t"]);
+      } else {
+        llamaProcess.kill("SIGKILL");
+      }
+      llamaProcess = null;
+    }
+    isModelLoaded = false;
+    res.json({ success: true, message: "Model terminated." });
+  });
+
+  app.post("/api/exit-app", async (req, res) => {
+    logger.error("EXIT APP requested via hardware controls. Shutting down...");
+    if (llamaProcess) {
+      if (os.platform() === "win32") {
+        spawn("taskkill", ["/pid", llamaProcess.pid.toString(), "/f", "/t"]);
+      } else {
+        llamaProcess.kill("SIGKILL");
       }
     }
+    res.json({ success: true, message: "App exiting." });
+    setTimeout(() => {
+      process.exit(0);
+    }, 1000);
   });
 
   // Serve Vite in development
@@ -385,8 +516,9 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server is booted and actively running on port ${PORT}`);
+  const HOST = process.env.HOST || '127.0.0.1';
+  app.listen(PORT, HOST, () => {
+    console.log(`Server is booted and actively running on http://${HOST}:${PORT}`);
   });
 }
 

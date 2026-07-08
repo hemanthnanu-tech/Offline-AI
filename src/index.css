@@ -1,5 +1,5 @@
 @import "tailwindcss";
-
+@custom-variant dark (&:where(.dark, .dark *));
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
@@ -19,10 +19,8 @@
   --assistant-avatar-border: #e3e3e3;
   --modal-bg: #ffffff;
   --modal-sidebar-bg: #f3f4f6;
-  --user-bubble-bg: #dae8fc;  /* ChatGPT-style light blue */
-  --user-bubble-text: #0d0d0d;
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
+  --user-bubble-bg: var(--accent);
+  --user-bubble-text: var(--accent-fg);
 }
 
 .dark {
@@ -40,8 +38,8 @@
   --assistant-avatar-border: #2a2a2a;
   --modal-bg: #171717;
   --modal-sidebar-bg: #0d0d0d;
-  --user-bubble-bg: #2a2a2a;  /* Dark mode: dark bubble */
-  --user-bubble-text: #ececec;
+  --user-bubble-bg: var(--accent);
+  --user-bubble-text: var(--accent-fg);
   --accent: #818cf8;
   --accent-hover: #6366f1;
 }
@@ -358,4 +356,104 @@ body {
   --input-border: #ffffff !important;
   --text-muted: #eeeeee !important;
   --text-secondary: #ffffff !important;
+}
+
+/* Markdown Enhancements */
+.assistant-msg-layout table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1rem 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.assistant-msg-layout th {
+  background-color: var(--bg-hover);
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13.5px;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.assistant-msg-layout td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 14px;
+}
+
+.assistant-msg-layout tr:last-child td {
+  border-bottom: none;
+}
+
+.assistant-msg-layout tbody tr:nth-child(even) {
+  background-color: var(--bg-main);
+}
+.assistant-msg-layout tbody tr:nth-child(odd) {
+  background-color: var(--bg-input);
+}
+
+.assistant-msg-layout tbody tr:hover {
+  background-color: var(--bg-hover);
+}
+
+.assistant-msg-layout blockquote {
+  border-left: 4px solid var(--accent);
+  padding: 12px 16px;
+  margin: 16px 0;
+  background-color: var(--bg-input);
+  border-radius: 0 8px 8px 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.assistant-msg-layout p code, .user-msg-bubble p code {
+  background-color: var(--bg-input);
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  color: var(--accent);
+  border: 1px solid var(--border-color);
+}
+.user-msg-bubble p code {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: inherit;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Chat Background Ambient Gradient */
+.chat-container {
+  background-color: var(--bg-main);
+  background-image: 
+    radial-gradient(circle at 15% 50%, var(--accent), transparent 25%),
+    radial-gradient(circle at 85% 30%, var(--accent), transparent 25%);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+.chat-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: var(--bg-main);
+  opacity: 0.95;
+  z-index: 0;
+  pointer-events: none;
+}
+.dark .chat-container::before {
+  opacity: 0.92;
+}
+
+/* Hover-highlight on message bubbles */
+.assistant-msg-layout {
+  padding: 8px 12px;
+  margin: -8px -12px;
+  border-radius: 12px;
+  transition: background-color 0.2s;
+}
+.assistant-msg-layout:hover {
+  background-color: var(--bg-hover);
 }

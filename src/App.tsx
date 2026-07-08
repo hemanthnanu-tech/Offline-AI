@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatContainer from './components/ChatContainer';
 import SettingsModal from './components/SettingsModal';
@@ -11,6 +11,7 @@ export default function App() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>('');
   const [activeModel, setActiveModel] = useState<GGUFModelInfo | null>(null);
+  const [activeVisionModel, setActiveVisionModel] = useState<GGUFModelInfo | null>(null);
   
 
   // Settings
@@ -23,18 +24,23 @@ export default function App() {
           ...parsed,
           userName: parsed.userName || '',
           userDob: parsed.userDob || '',
-          userDetails: parsed.userDetails || ''
+          userDetails: parsed.userDetails || '',
+          assistantName: parsed.assistantName || 'Assistant',
+          autoScroll: parsed.autoScroll !== false,
+          topK: parsed.topK || 40,
+          contextSize: parsed.contextSize || 4096
         };
       } catch (e) {}
     }
     return {
       temperature: 0.7,
       topP: 0.9,
-      maxTokens: 1024,
+      topK: 40,
+      maxTokens: 2048,
+      contextSize: 4096,
       repeatPenalty: 1.1,
       systemPrompt: "You are an intelligent, helpful, and highly accurate AI assistant running locally. Your primary directive is to provide clear, direct, and factual answers. Format your responses elegantly using bold headings (##), bullet points (-), and concise sub-points where appropriate for high readability.",
       engine: 'server-assisted',
-      codexEnabled: false,
       allocVramMb: 4096,
       floatPrecision: 'float16',
       appearance: 'system',
@@ -43,9 +49,12 @@ export default function App() {
       language: 'en',
       enableDictation: false,
       separateVoice: false,
+      useGPU: false,
       userName: '',
+      assistantName: 'Assistant',
       userDob: '',
-      userDetails: ''
+      userDetails: '',
+      autoScroll: true
     };
   });
 
@@ -83,6 +92,18 @@ export default function App() {
     const interval = setInterval(fetchStats, 3000);
     return () => clearInterval(interval);
   }, [isGithubPages]);
+
+  const refreshModelsList = async () => {
+    try {
+      const modelsRes = await fetch('/api/models');
+      const modelsData = await modelsRes.json();
+      if (modelsData.models) {
+        setAvailableModels(modelsData.models);
+      }
+    } catch (e) {
+      console.error("Failed to refresh models:", e);
+    }
+  };
 
   // Sync settings to localStorage
   useEffect(() => {
@@ -123,22 +144,27 @@ export default function App() {
 
   // Sync accent color and contrast overrides
   useEffect(() => {
-    const accentColors: Record<string, { main: string; hover: string }> = {
-      blue: { main: '#007aff', hover: '#0062cc' },
-      purple: { main: '#af52de', hover: '#963ec8' },
-      teal: { main: '#30b0c7', hover: '#258ea2' },
-      green: { main: '#34c759', hover: '#28a745' }
+    const accentColors: Record<string, { main: string; hover: string; fg: string }> = {
+      blue: { main: '#007aff', hover: '#0062cc', fg: '#ffffff' },
+      purple: { main: '#af52de', hover: '#963ec8', fg: '#ffffff' },
+      teal: { main: '#30b0c7', hover: '#258ea2', fg: '#ffffff' },
+      green: { main: '#34c759', hover: '#28a745', fg: '#ffffff' },
+      black: { main: '#000000', hover: '#333333', fg: '#ffffff' },
+      white: { main: '#ffffff', hover: '#f3f4f6', fg: '#000000' },
+      brown: { main: '#8b4513', hover: '#5c2e0b', fg: '#ffffff' }
     };
     const activeAccent = accentColors[settings.accentColor] || accentColors.blue;
-    document.documentElement.style.setProperty('--accent-color', activeAccent.main);
-    document.documentElement.style.setProperty('--accent-color-hover', activeAccent.hover);
+    document.documentElement.style.setProperty('--accent', activeAccent.main);
+    document.documentElement.style.setProperty('--accent-hover', activeAccent.hover);
+    document.documentElement.style.setProperty('--accent-fg', activeAccent.fg);
 
     if (settings.contrast === 'high') {
       document.documentElement.classList.add('high-contrast');
     } else {
       document.documentElement.classList.remove('high-contrast');
     }
-  }, [settings.accentColor, settings.contrast]);
+
+    }, [settings.accentColor, settings.contrast]);
 
   // Load initial settings, session history, and initial chat mock
   useEffect(() => {
@@ -165,22 +191,33 @@ export default function App() {
         const data = await res.json();
         
         let loadedModelName = "";
-        if (data.status === 'healthy' && data.modelLoaded && data.modelInfo) {
+        if ((data.modelLoaded === true || data.status === 'healthy') && data.modelLoaded && data.modelInfo) {
           setActiveModel(data.modelInfo);
+          setActiveVisionModel(data.visionModelInfo || null);
           loadedModelName = data.modelInfo.fileName;
         }
 
         // Fetch available models and auto-load if none active
         const modelsRes = await fetch('/api/models');
         const modelsData = await modelsRes.json();
-        if (modelsData.models) {
-          setAvailableModels(modelsData.models);
-          
-          if (!loadedModelName && modelsData.models.length > 0) {
-            console.log("Auto-detecting and loading model silently:", modelsData.models[0]);
-            handleLoadModel(modelsData.models[0], true);
+          if (modelsData.models) {
+            setAvailableModels(modelsData.models);
+            
+            if (!loadedModelName && modelsData.models.length > 0) {
+              let bestModel = modelsData.models[0];
+              if (modelsData.modelDetails && modelsData.modelDetails.length > 0) {
+                 const sortedModels = [...modelsData.modelDetails].sort((a: any, b: any) => a.sizeBytes - b.sizeBytes);
+                 const smallModels = sortedModels.filter((m: any) => m.sizeBytes < 5 * 1024 * 1024 * 1024);
+                 if (smallModels.length > 0) {
+                   bestModel = smallModels[smallModels.length - 1].name;
+                 } else {
+                   bestModel = sortedModels[0].name;
+                 }
+              }
+              console.log("Auto-detecting and loading best model silently:", bestModel);
+              handleLoadModel(bestModel, true);
+            }
           }
-        }
       } catch (e) {
         console.error('Failed to get backend model status:', e);
       }
@@ -280,17 +317,22 @@ export default function App() {
     setSettings(prev => ({ ...prev, appearance: nextTheme }));
   };
 
-  const handleNewSession = () => {
+  const createNewSession = useCallback(() => {
+    const defaultModel = availableModels.length > 0 ? availableModels[0] : 'Meta-Llama-3-8B-Instruct-Q4_K_M.gguf';
+    
     const newSession: ChatSession = {
       id: `session-${Date.now()}`,
-      title: `Draft Chat ${sessions.length + 1}`,
+      title: 'New Chat',
       messages: [],
       createdAt: new Date().toISOString(),
-      modelName: activeModel?.name || 'Local GGUF Engine'
+      modelName: activeModel ? activeModel.fileName || activeModel.name : defaultModel
     };
     setSessions(prev => [newSession, ...prev]);
     setActiveSessionId(newSession.id);
-  };
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, [availableModels, activeModel]);
 
   const handleDeleteSession = (id: string) => {
     const updated = sessions.filter(s => s.id !== id);
@@ -315,12 +357,17 @@ export default function App() {
     setSessions(prev => prev.map(s => s.id === id ? { ...s, title: newTitle } : s));
   };
 
-
-  const handleToggleCodex = () => {
-    setSettings(prev => ({ ...prev, codexEnabled: !prev.codexEnabled }));
+  const handleDeleteMessage = (msgId: string) => {
+    setSessions(prev => prev.map(s => {
+      if (s.id === activeSessionId) {
+        return { ...s, messages: s.messages.filter(m => m.id !== msgId) };
+      }
+      return s;
+    }));
   };
 
-  const executeInference = async (promptText: string, updatedMessages: ChatMessage[], images?: string[]) => {
+
+  const executeInference = async (sessionId: string, updatedMessages: ChatMessage[], images?: string[]) => {
     setGenerating(true);
 
     const controller = new AbortController();
@@ -333,12 +380,11 @@ export default function App() {
       content: '',
       timestamp: new Date().toLocaleTimeString(),
       tokensPerSecond: 0,
-      isCodex: settings.codexEnabled,
     };
 
     // Add blank assistant message
     setSessions(prev => prev.map(s => {
-      if (s.id === activeSessionId) {
+      if (s.id === sessionId) {
         return { ...s, messages: [...updatedMessages, dummyResponseMsg] };
       }
       return s;
@@ -346,12 +392,7 @@ export default function App() {
 
     let finalSystemPrompt = settings.systemPrompt;
     
-    // Codex-specific instructions
-    if (settings.codexEnabled) {
-      finalSystemPrompt += `\n\n[SYSTEM DIRECTIVE: CODEX ENGINE ENABLED]\nYou are an expert Software Engineer and Architect. ONLY respond with exactly what is asked. DO NOT output extra conversational fluff. ALWAYS wrap your code implementations inside proper markdown code blocks. DO NOT output raw unformatted code first. If the user's request is vague or not specific, you MUST ask clarifying questions before writing any code.`;
-    } else {
-      finalSystemPrompt += `\n\n[SYSTEM DIRECTIVE: NORMAL MODE]\nYou are a helpful and conversational AI assistant. ONLY respond with exactly what is asked. Do not do anything extra. If the user's request is not specific, ask clarifying questions before answering.`;
-    }
+    finalSystemPrompt += `\n\n[SYSTEM DIRECTIVE: NORMAL MODE]\nYou are a helpful and conversational AI assistant. ONLY respond with exactly what is asked. Do not do anything extra. If the user's request is not specific, ask clarifying questions before answering.`;
 
     if (settings.userName || settings.userDetails) {
       finalSystemPrompt += `\n\nContext about the user:\n`;
@@ -361,17 +402,27 @@ export default function App() {
       finalSystemPrompt += `Address the user naturally. Use the above context to personalize your responses when relevant.`;
     }
 
+    const messagesWithSystem: ChatMessage[] = [
+      { id: 'sys-0', role: 'system', content: finalSystemPrompt, timestamp: '' },
+      ...updatedMessages
+    ];
+
     const lastUserMsg = updatedMessages[updatedMessages.length - 1];
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: updatedMessages,
-          temperature: settings.temperature
+          messages: messagesWithSystem,
+          temperature: settings.temperature,
+          topP: settings.topP,
+          topK: settings.topK,
+          maxTokens: settings.maxTokens
         }),
         signal: controller.signal
       });
+
+      // Slot polling removed - endpoint not required
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({ error: 'Backend error' }));
@@ -381,23 +432,28 @@ export default function App() {
         const reader = res.body?.getReader();
         const decoder = new TextDecoder("utf-8");
         
-        let streamingBuffer = "";
-        let isThinkingPhase = false;
-        let thoughtContent = "";
+
         let finalContent = "";
         
         const startTime = Date.now();
         let tokenCount = 0;
+        let streamBuffer = ""; // Accumulate incomplete chunks here
+        let wasReasoning = false;
 
         while (reader) {
           const { done, value } = await reader.read();
           if (done) break;
           
           const chunkStr = decoder.decode(value, { stream: true });
-          const lines = chunkStr.split("\n");
+          streamBuffer += chunkStr;
+          
+          const lines = streamBuffer.split("\n");
+          // Keep the last element in the buffer because it might be an incomplete line
+          streamBuffer = lines.pop() || "";
           
           for (const line of lines) {
             const trimmedLine = line.trim();
+            if (!trimmedLine) continue;
             if (trimmedLine === "data: [DONE]") break;
             if (trimmedLine.startsWith("data: ")) {
               try {
@@ -406,29 +462,80 @@ export default function App() {
                   // Show error to user
                   finalContent = `**Error**: ${data.error}`;
                 }
-                if (data.chunk) {
+                
+                // Support both OpenAI format (native llama.cpp) and legacy format (from old server.ts)
+                let chunkContent = "";
+                const delta = data.choices?.[0]?.delta;
+                
+                if (delta !== undefined) {
+                  if (delta.reasoning_content !== undefined && delta.reasoning_content !== null) {
+                    wasReasoning = true;
+                    if (!finalContent.includes('<think>')) {
+                      chunkContent += '<think>\n' + delta.reasoning_content;
+                    } else {
+                      chunkContent += delta.reasoning_content;
+                    }
+                  }
+                  if (delta.content !== undefined && delta.content !== null) {
+                    if (wasReasoning) {
+                      chunkContent += '\n</think>\n' + delta.content;
+                      wasReasoning = false;
+                    } else {
+                      chunkContent += delta.content;
+                    }
+                  }
+                } else if (data.chunk !== undefined && data.chunk !== null) {
+                  chunkContent = data.chunk;
+                }
+                  
+                if (chunkContent !== "") {
                   tokenCount++;
-                  const timeElapsed = (Date.now() - startTime) / 1000;
-                  const tps = timeElapsed > 0 ? tokenCount / timeElapsed : 0;
+                  const timeElapsed = Math.max(0.01, (Date.now() - startTime) / 1000);
+                  const tps = tokenCount / timeElapsed;
                   
-                  streamingBuffer += data.chunk;
-                  finalContent += data.chunk;
+                  finalContent += chunkContent;
                   
-                  // Empty streaming buffer since we appended it directly to finalContent
-                  streamingBuffer = "";
-
                   setSessions(prev => prev.map(s => {
-                    if (s.id === activeSessionId) {
+                    if (s.id === sessionId) {
                       const msgs = [...s.messages];
                       const targetIdx = msgs.findIndex(m => m.id === responseId);
                       if (targetIdx !== -1) {
-                        // Strip think tags aggressively to remove all internal thought outputs
-                        const displayContent = finalContent.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<think>[\s\S]*/g, '');
+                          // Render thoughts natively in text to ensure streaming works perfectly
+                          let displayContent = finalContent
+                            .replace(/<think>/g, '---\n**🧠 Thought Process:**\n\n')
+                            .replace(/<\/think>/g, '\n\n---\n\n');
 
-                        msgs[targetIdx] = { 
+                          msgs[targetIdx] = { 
                           ...msgs[targetIdx], 
                           content: displayContent, 
                           tokensPerSecond: parseFloat(tps.toFixed(2)) 
+                        };
+                      }
+                      return { ...s, messages: msgs };
+                    }
+                    return s;
+                  }));
+                }
+                
+                if (data.usage || data.timings) {
+                  setSessions(prev => prev.map(s => {
+                    if (s.id === sessionId) {
+                      const msgs = [...s.messages];
+                      const targetIdx = msgs.findIndex(m => m.id === responseId);
+                      if (targetIdx !== -1) {
+                        const promptTokens = data.usage?.prompt_tokens || 0;
+                        const completionTokens = data.usage?.completion_tokens || 0;
+                        const totalTimeMs = (data.timings?.prompt_ms || 0) + (data.timings?.predicted_ms || 0);
+                        const tps = data.timings?.predicted_per_second || 0;
+                        msgs[targetIdx] = {
+                          ...msgs[targetIdx],
+                          generationStats: {
+                            promptTokens,
+                            completionTokens,
+                            totalTokens: promptTokens + completionTokens,
+                            tokensPerSecond: parseFloat(tps.toFixed(2)),
+                            totalTimeMs
+                          }
                         };
                       }
                       return { ...s, messages: msgs };
@@ -444,16 +551,28 @@ export default function App() {
         }
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        console.log("Inference aborted by user.");
+        // User stopped generation — remove the empty placeholder message
+        setSessions(prev => prev.map(s => {
+          if (s.id === sessionId) {
+            const msgs = s.messages.filter(m => m.id !== responseId || m.content.trim() !== '');
+            return { ...s, messages: msgs };
+          }
+          return s;
+        }));
         return;
       }
       console.error("Inference Error:", err);
+      const isConnectionError = err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError') || err.message?.includes('fetch');
+      const errorMessage = isConnectionError ? 
+        "⚠️ **Connection Lost**: The local AI engine is unreachable. Please wait a moment for the model to finish loading or restart the server." 
+        : `⚠️ **Generation Error**: ${err.message || "Failed to synthesize offline response."}`;
+
       setSessions(prev => prev.map(s => {
-        if (s.id === activeSessionId) {
+        if (s.id === sessionId) {
           const msgs = [...s.messages];
           const targetIdx = msgs.findIndex(m => m.id === responseId);
           if (targetIdx !== -1) {
-            msgs[targetIdx] = { ...msgs[targetIdx], content: `**Error**: ${err.message || "Failed to generate offline response."}` };
+            msgs[targetIdx] = { ...msgs[targetIdx], content: errorMessage };
           }
           return { ...s, messages: msgs };
         }
@@ -465,7 +584,7 @@ export default function App() {
     }
   };
 
-  const handleSendMessage = (text: string, images?: string[]) => {
+  const handleSendMessage = useCallback((text: string, images?: string[]) => {
     if (generating) return;
 
     const userMsg: ChatMessage = {
@@ -483,7 +602,7 @@ export default function App() {
 
     // Auto rename blank drafts
     let updatedTitle = currentSession.title;
-    if (currentSession.messages.length === 0 && currentSession.title.startsWith('Draft Chat')) {
+    if (currentSession.messages.length === 0) {
       updatedTitle = text.length > 22 ? `${text.substring(0, 22)}...` : text;
     }
 
@@ -498,10 +617,10 @@ export default function App() {
       return s;
     }));
 
-    executeInference(text, updatedMessages, images);
-  };
+    executeInference(activeSessionId, updatedMessages, images);
+  }, [generating, sessions, activeSessionId, executeInference]);
 
-  const handleRegenerate = () => {
+  const handleRegenerate = useCallback(() => {
     const currentSession = sessions.find(s => s.id === activeSessionId);
     if (!currentSession || currentSession.messages.length === 0 || generating) return;
 
@@ -511,30 +630,29 @@ export default function App() {
     
     let lastUserPromptIdx = -1;
     if (lastMsg.role === 'assistant') {
-      msgs.pop(); // discard old output
+      msgs.pop(); // remove assistant message
+      lastUserPromptIdx = msgs.length - 1;
+    } else {
+      lastUserPromptIdx = msgs.length - 1;
     }
 
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      if (msgs[i].role === 'user') {
-        lastUserPromptIdx = i;
-        break;
-      }
+    if (lastUserPromptIdx >= 0) {
+      setSessions(prev => prev.map(s => {
+        if (s.id === activeSessionId) {
+          return { ...s, messages: msgs };
+        }
+        return s;
+      }));
+      executeInference(activeSessionId, msgs);
     }
+  }, [sessions, activeSessionId, generating, executeInference]);
 
-    if (lastUserPromptIdx === -1) return;
-
-    const promptText = msgs[lastUserPromptIdx].content;
-    const cleanStack = msgs.slice(0, lastUserPromptIdx + 1);
-
-    setSessions(prev => prev.map(s => {
-      if (s.id === activeSessionId) {
-        return { ...s, messages: cleanStack };
-      }
-      return s;
-    }));
-
-    executeInference(promptText, cleanStack);
-  };
+  const clearAllChats = useCallback(() => {
+    if (confirm("Are you sure you want to delete ALL chat sessions? This action cannot be undone.")) {
+      setSessions([]);
+      setActiveSessionId('');
+    }
+  }, []);
 
   const handleEditMessage = (index: number, newText: string) => {
     const currentSession = sessions.find(s => s.id === activeSessionId);
@@ -556,7 +674,7 @@ export default function App() {
       return s;
     }));
 
-    executeInference(newText, nextStack);
+    executeInference(activeSessionId, nextStack);
   };
 
   const handleLoadModel = async (fileName: string, silent: boolean = false) => {
@@ -583,6 +701,7 @@ export default function App() {
       const data = await res.json();
       if (data.success && data.modelInfo) {
         setActiveModel(data.modelInfo);
+        setActiveVisionModel(data.visionModelInfo || null);
         if (!silent) {
           // Success handled silently or via a subtle toast if preferred.
         }
@@ -606,21 +725,35 @@ export default function App() {
   const handleStopGeneration = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
-      setGenerating(false);
     }
+    setGenerating(false);
+    // Also inform backend to clear its processing lock
+    fetch('/api/stop', { method: 'POST' }).catch(() => {});
   };
 
   const activeSession = sessions.find(s => s.id === activeSessionId);
   const activeSessionMessages = activeSession ? activeSession.messages : [];
 
   return (
-    <div className={`h-screen w-screen flex transition-all relative overflow-hidden ${theme === 'dark' ? 'dark' : ''}`} id="app-root">
+    <div className="h-[100dvh] w-screen flex transition-all relative overflow-hidden" id="app-root">
       
       {/* Fullscreen Loading Overlay for Model Switching */}
+      {(!activeModel && !isModelLoading) && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-500">
+          <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-2xl shadow-[0_8px_32px_rgba(239,68,68,0.15)] px-6 py-3 flex items-center gap-3 w-max max-w-[90vw] text-center">
+            <ShieldAlert className="w-5 h-5 text-red-500 flex-shrink-0 animate-pulse" />
+            <p className="text-[13px] font-medium text-[var(--text-main)] leading-snug">
+              <span className="text-red-500 font-bold mr-1">UI Design View Only.</span> 
+              No model is loaded. Add a <code className="text-xs bg-[var(--bg-hover)] px-1 rounded text-red-400">.gguf</code> model to the models folder to use the app.
+            </p>
+          </div>
+        </div>
+      )}
+
       {isModelLoading && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-[var(--modal-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl p-8 flex flex-col items-center max-w-sm w-full mx-4 text-center">
-             <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mb-4" />
+             <div className="w-12 h-12 border-4 border-[var(--accent)]/30 border-t-indigo-500 rounded-full animate-spin mb-4" />
              <h3 className="text-lg font-bold text-[var(--text-main)] mb-2">Loading Model...</h3>
              <p className="text-sm text-[var(--text-muted)]">Please wait while the AI model is being loaded into memory. This may take up to a minute depending on hardware.</p>
           </div>
@@ -628,23 +761,40 @@ export default function App() {
       )}
 
       {/* Dynamic theme colors layout */}
-      <div className="flex w-full h-full overflow-hidden select-text relative z-10">
+      <div className="flex w-full h-full overflow-hidden relative z-10">
         {/* Left Side menu */}
         {sidebarOpen && (
-          <Sidebar
-            sessions={sessions}
-            activeSessionId={activeSessionId}
-            onSelectSession={setActiveSessionId}
-            onNewSession={handleNewSession}
-            onDeleteSession={handleDeleteSession}
-            onRenameSession={handleRenameSession}
-            codexEnabled={settings.codexEnabled}
-            onToggleCodex={handleToggleCodex}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            onCloseSidebar={() => setSidebarOpen(false)}
-            onOpenLibrary={() => setLibraryOpen(true)}
-            settings={settings}
-          />
+          <>
+            <div 
+              className="md:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm" 
+              onClick={() => setSidebarOpen(false)} 
+            />
+            <div className="absolute md:relative z-50 h-full">
+              <Sidebar
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                onSelectSession={(id) => {
+                  setActiveSessionId(id);
+                  if (window.innerWidth < 768) {
+                    setSidebarOpen(false);
+                  }
+                }}
+                onNewSession={() => {
+                  createNewSession();
+                  if (window.innerWidth < 768) {
+                    setSidebarOpen(false);
+                  }
+                }}
+                onDeleteSession={handleDeleteSession}
+                onClearAll={clearAllChats}
+                onRenameSession={handleRenameSession}
+                onOpenSettings={() => setIsSettingsOpen(true)}
+                onCloseSidebar={() => setSidebarOpen(false)}
+                onOpenLibrary={() => setLibraryOpen(true)}
+                settings={settings}
+              />
+            </div>
+          </>
         )}
 
         {/* Center Chat Viewport & GGUF inspector right column */}
@@ -657,6 +807,7 @@ export default function App() {
               onRegenerate={handleRegenerate}
               onEditMessage={handleEditMessage}
               activeModel={activeModel}
+              activeVisionModel={activeVisionModel}
               settings={settings}
               generating={generating}
               onOpenSettings={() => setIsSettingsOpen(true)}
@@ -665,22 +816,12 @@ export default function App() {
               onStopGeneration={handleStopGeneration}
               availableModels={availableModels}
               onLoadModel={handleLoadModel}
+              onDeleteMessage={handleDeleteMessage}
+              onUnloadModel={() => {
+                setActiveModel(null);
+                setActiveVisionModel(null);
+              }}
             />
-
-            {/* Hardware Monitor Floating Widget */}
-            <div className="absolute top-4 right-4 flex items-center gap-2">
-              <div className="bg-[var(--bg-main)] border border-[var(--border-color)] rounded-xl shadow-sm px-3 py-1.5 flex items-center gap-3 text-[11px] font-mono text-[var(--text-main)]">
-                <div className="flex items-center gap-1.5" title="CPU Load">
-                  <Cpu className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>{hardwareStats?.cpu || '0%'}</span>
-                </div>
-                <div className="w-[1px] h-3 bg-[var(--border-color)]" />
-                <div className="flex items-center gap-1.5" title="Free RAM">
-                  <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{hardwareStats?.freeRam ? `${hardwareStats.freeRam} Free` : 'N/A'}</span>
-                </div>
-              </div>
-            </div>
           </div>
 
 
@@ -694,8 +835,19 @@ export default function App() {
         settings={settings}
         onSave={setSettings}
         activeModel={activeModel}
+        activeVisionModel={activeVisionModel}
         availableModels={availableModels}
         onLoadModel={handleLoadModel}
+        onRefreshModels={refreshModelsList}
+        onUnloadModel={() => {
+          setActiveModel(null);
+          setActiveVisionModel(null);
+        }}
+        onResetEverything={() => {
+          localStorage.clear();
+          window.location.reload();
+        }}
+        onClearAllChats={clearAllChats}
       />
 
       {/* Prompt Library Modal overlay */}
@@ -715,7 +867,7 @@ export default function App() {
           <div className="bg-[var(--bg-main)] border border-[var(--border-color)] rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
             <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent p-6 text-center border-b border-[var(--border-color)]">
               <div className="w-14 h-14 rounded-full bg-[var(--bg-main)] shadow-md flex items-center justify-center mx-auto mb-4 border border-[var(--border-color)]">
-                <Globe className="w-7 h-7 text-indigo-500" />
+                <Globe className="w-7 h-7 text-[var(--accent)]" />
               </div>
               <h2 className="text-2xl font-bold tracking-tight text-[var(--text-main)]" style={{ fontFamily: "'Inter', sans-serif" }}>Live Web Demo</h2>
               <p className="text-[var(--text-muted)] text-[13px] mt-2">
@@ -725,21 +877,20 @@ export default function App() {
             
             <div className="p-6 space-y-5">
               <div className="bg-[var(--bg-hover)]/60 p-4 rounded-xl text-sm leading-relaxed text-[var(--text-secondary)] border border-[var(--border-color)]">
-                This is a front-end UI showcase. Because running massive AI models in the browser can freeze laptops, we've disabled browser-based downloads.
+                This is a front-end UI showcase. Because running massive AI models in the browser can freeze laptops, we've disabled browser-based downloads in the live demo.
                 <br/><br/>
-                If you want to chat right now, go to <strong>Settings {'>'} Model Settings</strong> and enter a free <strong>Google Gemini API Key</strong>. 
+                To run this AI locally with full privacy, please download the project from GitHub and run it on your machine with a GGUF model!
                 <br/><br/>
                 Otherwise, you can just click around to explore the UI design!
               </div>
               <div className="flex flex-col gap-2.5">
                 <button
                   onClick={() => {
-                    setShowDemoPopup(false);
-                    setIsSettingsOpen(true);
+                    window.open('https://github.com/hemanthnanu-tech/Offline-AI', '_blank');
                   }}
-                  className="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-xl transition shadow-sm hover:shadow-md cursor-pointer"
+                  className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold rounded-xl transition shadow-sm hover:shadow-md cursor-pointer"
                 >
-                  Enter API Key in Settings
+                  View Project on GitHub
                 </button>
                 <button
                   onClick={() => setShowDemoPopup(false)}
@@ -755,3 +906,4 @@ export default function App() {
     </div>
   );
 }
+

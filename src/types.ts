@@ -30,10 +30,17 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   tokensPerSecond?: number;
-  isCodex?: boolean;
   images?: string[];
   thoughtProcess?: string;
   isThinking?: boolean;
+  generationStats?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    tokensPerSecond: number;
+    totalTimeMs: number;
+  };
+  loadingProgress?: number;
 }
 
 export interface ChatSession {
@@ -60,21 +67,24 @@ export interface ModelPreset {
 export interface InferenceSettings {
   temperature: number;
   topP: number;
+  topK: number;
   maxTokens: number;
+  contextSize: number;
   repeatPenalty: number;
   systemPrompt: string;
   engine: InferenceEngine;
-  codexEnabled: boolean;
   allocVramMb: number;
   floatPrecision: 'float16' | 'float32';
   appearance: 'system' | 'light' | 'dark';
   contrast: 'system' | 'high' | 'standard';
-  accentColor: 'blue' | 'purple' | 'teal' | 'green';
+  accentColor: string;
   language: string;
   enableDictation: boolean;
   separateVoice: boolean;
   userName: string;
+  assistantName: string;
   userDob: string;
   userDetails: string;
   useGPU: boolean;
+  autoScroll: boolean;
 }

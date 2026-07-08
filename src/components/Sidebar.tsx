@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { 
-  SquarePen, Search, Code, MessageSquare, Settings, Trash2, Edit2, PanelLeftClose, BookOpen
+  SquarePen, Search, Code, MessageSquare, Settings, Trash2, Edit2, PanelLeftClose, BookOpen, MoreHorizontal, X
 } from 'lucide-react';
 import { ChatSession, GGUFModelInfo, InferenceSettings } from '../types';
+import { ContextMenu } from './ContextMenu';
 
 interface SidebarProps {
   sessions: ChatSession[];
@@ -11,11 +12,10 @@ interface SidebarProps {
   onNewSession: () => void;
   onDeleteSession: (id: string) => void;
   onRenameSession: (id: string, newTitle: string) => void;
-  codexEnabled: boolean;
-  onToggleCodex: () => void;
   onOpenSettings: () => void;
   onCloseSidebar: () => void;
   onOpenLibrary: () => void;
+  onClearAll?: () => void;
   settings: InferenceSettings;
 }
 
@@ -36,11 +36,10 @@ export default function Sidebar({
   onNewSession,
   onDeleteSession,
   onRenameSession,
-  codexEnabled,
-  onToggleCodex,
   onOpenSettings,
   onCloseSidebar,
   onOpenLibrary,
+  onClearAll,
   settings
 }: SidebarProps) {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
@@ -86,15 +85,7 @@ export default function Sidebar({
           <PanelLeftClose className="w-5 h-5" />
         </button>
 
-        <button
-          type="button"
-          onClick={onNewSession}
-          className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-main)] transition-all cursor-pointer active:scale-95 hover:scale-105"
-          title="New Chat"
-        >
-          <SquarePen className="w-5 h-5" />
-        </button>
-      </div>
+        </div>
 
       {/* Main Sidebar Navigation Menu */}
       <div className="flex-1 overflow-y-auto px-3.5 pb-4 space-y-4">
@@ -114,25 +105,21 @@ export default function Sidebar({
             <Search className="w-[18px] h-[18px] text-[var(--text-muted)] shrink-0" />
             <input
               type="text"
-              placeholder="Search chats"
+              placeholder="Search chats..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-transparent border-none text-[13.5px] outline-none pl-2 text-[var(--text-main)] placeholder-[var(--text-muted)]"
+              className="w-full bg-transparent border-none text-[13.5px] outline-none pl-2 pr-6 text-[var(--text-main)] placeholder-[var(--text-muted)]"
             />
+            {searchQuery && (
+              <button 
+                type="button" 
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 p-0.5 rounded-full hover:bg-[var(--bg-hover)] text-[var(--text-muted)] transition-all duration-300 ease-out"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
-
-          {/* Codex Switch Toggle */}
-          <button
-            type="button"
-            onClick={onToggleCodex}
-            className={`w-full sidebar-item ${codexEnabled ? 'bg-[var(--bg-hover)]' : ''}`}
-          >
-            <Code className="w-[18px] h-[18px] text-[var(--text-main)]" />
-            <div className="flex-1 text-left flex items-center justify-between">
-              <span>Codex Engine</span>
-              {codexEnabled && <span className="text-[10px] bg-indigo-500/15 text-indigo-500 px-1.5 py-0.5 rounded font-mono font-semibold">ON</span>}
-            </div>
-          </button>
 
           {/* Library button */}
           <button
@@ -151,7 +138,7 @@ export default function Sidebar({
             Recents
           </span>
 
-          <div className="space-y-0.5 max-h-[300px] overflow-y-auto pr-0.5">
+          <div className="space-y-0.5 pr-0.5">
             {sessions.length === 0 ? (
               filteredPlaceholders.length === 0 ? (
                 <div className="text-[10.5px] text-[var(--text-muted)] p-3 italic text-center">
@@ -163,7 +150,7 @@ export default function Sidebar({
                     key={i}
                     type="button"
                     onClick={onNewSession}
-                    className="w-full sidebar-item justify-start py-2.5 hover:bg-[var(--bg-hover)] text-[var(--text-main)] font-normal truncate"
+                    className="w-full sidebar-item justify-start py-2.5 hover:bg-[var(--bg-hover)] text-[var(--text-main)] font-normal truncate active:scale-[0.99] transition-transform"
                   >
                     <span className="truncate">{title}</span>
                   </button>
@@ -183,7 +170,7 @@ export default function Sidebar({
                     <div
                       key={session.id}
                       onClick={() => onSelectSession(session.id)}
-                      className={`group relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm transition-all cursor-pointer select-none border border-transparent active:scale-[0.98] ${
+                      className={`group relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm transition-all cursor-pointer select-none border border-transparent active:scale-[0.99] transition-transform ${
                         isActive 
                           ? 'bg-[var(--bg-hover)] text-[var(--text-main)] font-medium shadow-sm' 
                           : 'text-[var(--text-main)] hover:bg-[var(--bg-hover)]/60'
@@ -199,6 +186,7 @@ export default function Sidebar({
                               value={renamedTitle}
                               onChange={(e) => setRenamedTitle(e.target.value)}
                               onBlur={(e) => saveRename(session.id, e)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') saveRename(session.id, e as any); }}
                               className="w-full py-0.5 px-2 bg-transparent text-[var(--text-main)] rounded border border-[var(--border-color)] outline-none text-xs"
                               autoFocus
                             />
@@ -211,27 +199,32 @@ export default function Sidebar({
                       </div>
 
                       {!isEditing && (
-                        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition duration-150">
-                          <button
-                            type="button"
-                            onClick={(e) => startRename(session.id, session.title, e)}
-                            className="p-0.5 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-main)]"
-                            title="Rename thread"
+                          <div 
+                            className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition duration-150"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <Edit2 className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeleteSession(session.id);
-                            }}
-                            className="p-0.5 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-red-500"
-                            title="Delete thread"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
+                            <ContextMenu
+                              items={[
+                                {
+                                  id: 'rename',
+                                  label: 'Rename',
+                                  icon: Edit2,
+                                  onClick: () => startRename(session.id, session.title, { stopPropagation: () => {} } as any)
+                                },
+                                {
+                                  id: 'delete',
+                                  label: 'Delete',
+                                  icon: Trash2,
+                                  danger: true,
+                                  onClick: () => onDeleteSession(session.id)
+                                }
+                              ]}
+                            >
+                              <div className="p-1 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-main)] transition-all duration-300 ease-out">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </div>
+                            </ContextMenu>
+                          </div>
                       )}
                     </div>
                   );
@@ -250,11 +243,11 @@ export default function Sidebar({
         <div className="flex items-center gap-3 min-w-0 hover:scale-[1.02] transition-transform">
           {/* Orange Avatar */}
           <div className="w-7 h-7 rounded-full bg-[#f48c06] text-white text-[11px] font-bold flex items-center justify-center shrink-0">
-            {settings.userName ? settings.userName.charAt(0).toUpperCase() : 'U'}
+            {typeof settings?.userName === 'string' && settings.userName.trim().length > 0 ? settings.userName.trim().charAt(0).toUpperCase() : 'U'}
           </div>
           <div className="text-left leading-tight min-w-0">
             <div className="text-[var(--text-main)] font-semibold text-[13px] truncate">
-              {settings.userName || 'Offline User'}
+              {settings?.userName || 'Offline User'}
             </div>
           </div>
         </div>
@@ -269,9 +262,10 @@ export default function Sidebar({
           className="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition cursor-pointer"
           title="Preferences & Models"
         >
-          <Settings className="w-4.5 h-4.5" />
+          <Settings className="w-[18px] h-[18px]" />
         </button>
       </div>
     </div>
   );
 }
+
