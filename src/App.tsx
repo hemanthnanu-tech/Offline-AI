@@ -4,7 +4,7 @@ import ChatContainer from './components/ChatContainer';
 import SettingsModal from './components/SettingsModal';
 import LibraryModal from './components/LibraryModal';
 import { ChatSession, ChatMessage, InferenceSettings, GGUFModelInfo } from './types';
-import { Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff, Loader2, Globe, DownloadCloud, ChevronDown, ChevronUp, Square, Cpu, HardDrive, ShieldAlert } from 'lucide-react';
+import { Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff, Loader2, Globe, DownloadCloud, ChevronDown, ChevronUp, Square, Cpu, HardDrive, AlertCircle } from 'lucide-react';
 
 export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -741,7 +741,7 @@ export default function App() {
       {(!activeModel && !isModelLoading) && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-500">
           <div className="bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-2xl shadow-[0_8px_32px_rgba(239,68,68,0.15)] px-6 py-3 flex items-center gap-3 w-max max-w-[90vw] text-center">
-            <ShieldAlert className="w-5 h-5 text-red-500 flex-shrink-0 animate-pulse" />
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 animate-pulse" />
             <p className="text-[13px] font-medium text-[var(--text-main)] leading-snug">
               <span className="text-red-500 font-bold mr-1">UI Design View Only.</span> 
               No model is loaded. Add a <code className="text-xs bg-[var(--bg-hover)] px-1 rounded text-red-400">.gguf</code> model to the models folder to use the app.
