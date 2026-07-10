@@ -14,7 +14,7 @@ interface SettingsModalProps {
   onSave: (newSettings: InferenceSettings) => void;
   activeModel: GGUFModelInfo | null;
   activeVisionModel?: any;
-  availableModels: string[];
+  availableModels: any[];
   onLoadModel: (fileName: string) => void;
   onRefreshModels?: () => void;
   onResetEverything?: () => void;
@@ -698,9 +698,13 @@ export default function SettingsModal({
                         {availableModels.length > 0 ? (
 
                           <div className="border border-[var(--border-color)] rounded-lg overflow-hidden divide-y divide-[var(--border-color)]">
-                            {availableModels.map(model => (
-                              <div key={model} className="flex items-center justify-between p-3 hover:bg-[var(--bg-hover)] transition">
-                                <span className="text-[13px] text-[var(--text-main)] truncate mr-4">{model}</span>
+                            {availableModels.map((modelObj, i) => {
+                              const model = typeof modelObj === 'string' ? modelObj : modelObj.name;
+                              const sizeBytes = typeof modelObj === 'string' ? null : modelObj.sizeBytes;
+                              const sizeLabel = sizeBytes ? (sizeBytes / (1024*1024*1024)).toFixed(2) + ' GB' : '';
+                              return (
+                              <div key={model + i} className="flex items-center justify-between p-3 hover:bg-[var(--bg-hover)] transition">
+                                <span className="text-[13px] text-[var(--text-main)] truncate mr-4 flex justify-between w-full"><span>{model}</span> {sizeLabel && <span className="opacity-50 text-[11px] whitespace-nowrap ml-2">{sizeLabel}</span>}</span>
                                 <button
                                   onClick={() => onLoadModel(model)}
                                   disabled={activeModel?.fileName === model}
@@ -712,8 +716,8 @@ export default function SettingsModal({
                                 >
                                   {activeModel?.fileName === model ? 'Loaded' : 'Load Model'}
                                 </button>
-                              </div>
-                            ))}
+                                </div>
+                              )})}
                           </div>
                         ) : (
                           <div className="text-center p-6 border border-dashed border-[var(--border-color)] rounded-xl flex flex-col items-center justify-center gap-3">
@@ -1005,6 +1009,12 @@ export default function SettingsModal({
                       <p className="text-[13px] text-[var(--text-muted)]">
                         A fully private, high-performance sandbox for local LLMs.
                       </p>
+                      <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--accent)]/10 border border-[var(--accent)]/20">
+                        <Sparkles className="w-4 h-4 text-[var(--accent)]" />
+                        <span className="text-[12px] font-semibold text-[var(--text-main)]">
+                          Developed and Designed by <span className="text-[var(--accent)]">Hemanth Kumar K</span>
+                        </span>
+                      </div>
                     </div>
                     
                     <div className="space-y-5">

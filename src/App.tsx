@@ -20,6 +20,16 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
+        
+        // Migration: Update default system prompt to include anti-hallucination guardrails
+        const oldDefaultPrompt = "You are an intelligent, helpful, and highly accurate AI assistant running locally. Your primary directive is to provide clear, direct, and factual answers. Format your responses elegantly using bold headings (##), bullet points (-), and concise sub-points where appropriate for high readability.";
+        if (parsed.systemPrompt === oldDefaultPrompt) {
+            parsed.systemPrompt = "You are an intelligent, helpful, and highly accurate AI assistant running locally. Your primary directive is to provide clear, direct, and factual answers. IF YOU DO NOT KNOW THE ANSWER, OR LACK SPECIFIC DATA, YOU MUST EXPLICITLY STATE \"I do not have that information\" RATHER THAN GUESSING. Never hallucinate facts, specifications, or data. Format your responses elegantly using bold headings (##), bullet points (-), and concise sub-points where appropriate for high readability.";
+        }
+        if (parsed.temperature === 0.7) {
+            parsed.temperature = 0.3;
+        }
+
         return {
           ...parsed,
           userName: parsed.userName || '',
@@ -33,13 +43,13 @@ export default function App() {
       } catch (e) {}
     }
     return {
-      temperature: 0.7,
+      temperature: 0.3,
       topP: 0.9,
       topK: 40,
       maxTokens: 2048,
       contextSize: 4096,
       repeatPenalty: 1.1,
-      systemPrompt: "You are an intelligent, helpful, and highly accurate AI assistant running locally. Your primary directive is to provide clear, direct, and factual answers. Format your responses elegantly using bold headings (##), bullet points (-), and concise sub-points where appropriate for high readability.",
+      systemPrompt: "You are an intelligent, helpful, and highly accurate AI assistant running locally. Your primary directive is to provide clear, direct, and factual answers. IF YOU DO NOT KNOW THE ANSWER, OR LACK SPECIFIC DATA, YOU MUST EXPLICITLY STATE \"I do not have that information\" RATHER THAN GUESSING. Never hallucinate facts, specifications, or data. Format your responses elegantly using bold headings (##), bullet points (-), and concise sub-points where appropriate for high readability.",
       engine: 'server-assisted',
       allocVramMb: 4096,
       floatPrecision: 'float16',
@@ -64,7 +74,7 @@ export default function App() {
   const [isModelLoading, setIsModelLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [libraryOpen, setLibraryOpen] = useState(false);
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [availableModels, setAvailableModels] = useState<any[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isGithubPages = window.location.hostname === 'hemanthnanu-tech.github.io';
   const [showDemoPopup, setShowDemoPopup] = useState(isGithubPages);
@@ -97,8 +107,8 @@ export default function App() {
     try {
       const modelsRes = await fetch('/api/models');
       const modelsData = await modelsRes.json();
-      if (modelsData.models) {
-        setAvailableModels(modelsData.models);
+      if (modelsData.modelDetails) {
+        setAvailableModels(modelsData.modelDetails);
       }
     } catch (e) {
       console.error("Failed to refresh models:", e);
@@ -538,9 +548,10 @@ export default function App() {
                       const targetIdx = msgs.findIndex(m => m.id === responseId);
                       if (targetIdx !== -1) {
                         const promptTokens = data.usage?.prompt_tokens || 0;
-                        const completionTokens = data.usage?.completion_tokens || 0;
-                        const totalTimeMs = (data.timings?.prompt_ms || 0) + (data.timings?.predicted_ms || 0);
-                        const tps = data.timings?.predicted_per_second || 0;
+                        const completionTokens = data.usage?.completion_tokens || tokenCount;
+                        const finalTotalTimeMs = Math.max(1, Date.now() - startTime);
+                        const totalTimeMs = (data.timings?.prompt_ms || 0) + (data.timings?.predicted_ms || 0) || finalTotalTimeMs;
+                        const tps = data.timings?.predicted_per_second || (completionTokens / (finalTotalTimeMs / 1000));
                         msgs[targetIdx] = {
                           ...msgs[targetIdx],
                           generationStats: {
