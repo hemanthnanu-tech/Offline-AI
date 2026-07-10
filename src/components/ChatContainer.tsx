@@ -416,18 +416,16 @@ export default function ChatContainer({
     }
   }, [messages.length]);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    
+  const processImageFiles = (files: File[]) => {
     // Strict Vision model check
     const isVisionCapable = activeVisionModel || (activeModel && (activeModel.fileName.toLowerCase().includes('vision') || activeModel.fileName.toLowerCase().includes('llava')));
     if (!isVisionCapable) {
       toast.error("Vision model required! Please load an mmproj vision model in Settings to analyze images.");
-      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
     
     files.forEach(file => {
+      if (!file.type.startsWith('image/')) return;
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
@@ -436,6 +434,25 @@ export default function ChatContainer({
       };
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    processImageFiles(files);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (e.clipboardData.files.length > 0) {
+      processImageFiles(Array.from(e.clipboardData.files));
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files.length > 0) {
+      processImageFiles(Array.from(e.dataTransfer.files));
+    }
   };
 
   const removeImage = (indexToRemove: number) => {
@@ -1041,6 +1058,9 @@ export default function ChatContainer({
                 rows={1}
                 value={inputText}
                 onChange={handleInputChange}
+                onPaste={handlePaste}
+                onDrop={handleDrop}
+                onDragOver={(e) => e.preventDefault()}
                 placeholder={generating ? 'AI is thinking...' : PLACEHOLDERS[placeholderIdx]}
                 disabled={generating}
                 className="no-scrollbar"

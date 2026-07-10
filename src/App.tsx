@@ -193,7 +193,7 @@ export default function App() {
         let loadedModelName = "";
         if ((data.modelLoaded === true || data.status === 'healthy') && data.modelLoaded && data.modelInfo) {
           setActiveModel(data.modelInfo);
-          setActiveVisionModel(data.visionModelInfo || null);
+          setActiveVisionModel(data.hasVisionSupport ? { name: 'Vision Enabled', fileName: 'mmproj-enabled' } as any : null);
           loadedModelName = data.modelInfo.fileName;
         }
 
@@ -701,7 +701,7 @@ export default function App() {
       const data = await res.json();
       if (data.success && data.modelInfo) {
         setActiveModel(data.modelInfo);
-        setActiveVisionModel(data.visionModelInfo || null);
+        setActiveVisionModel(data.hasVisionSupport ? { name: 'Vision Enabled', fileName: 'mmproj-enabled' } as any : null);
         if (!silent) {
           // Success handled silently or via a subtle toast if preferred.
         }
