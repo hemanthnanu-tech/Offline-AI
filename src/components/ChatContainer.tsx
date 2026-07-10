@@ -1021,7 +1021,7 @@ export default function ChatContainer({
       </div>
 
       {/* Persistent bottom input bar - FLOATING GLASS ISLAND */}
-      <div className="pb-6 sm:pb-8 w-full pointer-events-none" style={{paddingTop:'40px', paddingLeft:'16px', paddingRight:'16px', paddingBottom:'max(32px, env(safe-area-inset-bottom))', zIndex:50, position:'absolute', bottom:0, left:0, right:0, background: 'var(--bg-main)', opacity: 0.85, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderTop: '1px solid var(--border-color)'}}>
+      <div className="pb-6 sm:pb-8 w-full pointer-events-none" style={{paddingTop:'40px', paddingLeft:'16px', paddingRight:'16px', paddingBottom:'max(32px, env(safe-area-inset-bottom))', zIndex:50, position:'absolute', bottom:0, left:0, right:0, background: 'linear-gradient(to top, var(--bg-main) 60%, transparent)'}}>
         
         {/* Scroll to bottom FAB */}
         {!atBottom && (
