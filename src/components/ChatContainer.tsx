@@ -550,7 +550,7 @@ export default function ChatContainer({
       </AnimatePresence>
       
       {/* Top Header - Replicated ChatGPT model dropdown and options */}
-      <header className="h-14 flex items-center justify-between px-4 bg-[var(--bg-main)]/80 backdrop-blur-xl sticky top-0 z-20 select-none border-b border-transparent transition-all duration-300 ease-out">
+      <header className="h-14 flex items-center justify-between px-4 bg-[var(--bg-main)]/60 backdrop-blur-2xl sticky top-0 z-20 select-none border-b border-[var(--border-color)]/30 transition-all duration-300 ease-out shadow-sm shadow-black/5 dark:shadow-none">
         <div className="flex items-center relative">
           {/* Collapse Open Menu Icon */}
           {!sidebarOpen && (
@@ -785,27 +785,30 @@ export default function ChatContainer({
                     <div className="flex flex-col items-end space-y-1.5 max-w-[80%] relative group">
                       <div style={{backgroundColor:'var(--user-bubble-bg)', color:'var(--user-bubble-text)', borderRadius:'18px', padding:'10px 16px', fontSize:'15px', lineHeight:'1.5', display:'inline-block', wordBreak:'break-word', maxWidth:'100%'}}>
                         {isEditing ? (
-                          <div className="space-y-2 min-w-[200px]">
-                            <textarea
-                              value={editingText}
-                              onChange={(e) => setEditingText(e.target.value)}
-                              rows={3}
-                              className="w-full p-2 text-sm bg-transparent border border-[var(--border-color)] rounded-lg text-[var(--text-main)] outline-none focus:border-[var(--text-muted)]"
-                            />
+                          <div className="space-y-3 min-w-[250px] w-full max-w-[600px] animate-in fade-in zoom-in-95 duration-200">
+                            <div className="relative group">
+                              <textarea
+                                value={editingText}
+                                onChange={(e) => setEditingText(e.target.value)}
+                                rows={3}
+                                className="w-full p-3 text-sm bg-[var(--bg-main)]/50 backdrop-blur-xl border border-[var(--border-color)]/50 shadow-inner rounded-xl text-[var(--text-main)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-all resize-y"
+                                style={{ color: 'var(--text-main)' }}
+                              />
+                            </div>
                             <div className="flex justify-end gap-2 text-xs font-semibold">
                               <button
                                 type="button"
                                 onClick={() => setEditingMsgIndex(null)}
-                                className="px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-main)] cursor-pointer"
+                                className="px-4 py-1.5 bg-[var(--bg-hover)] text-[var(--text-main)] rounded-lg hover:bg-[var(--border-color)] transition cursor-pointer shadow-sm"
                               >
                                 Cancel
                               </button>
                               <button
                                 type="button"
                                 onClick={() => saveEdit(index)}
-                                className="px-3 py-1 bg-[var(--text-main)] text-[var(--bg-main)] rounded hover:opacity-80 transition cursor-pointer"
+                                className="px-4 py-1.5 bg-[var(--accent)] text-[var(--accent-fg)] rounded-lg hover:opacity-90 transition cursor-pointer shadow-md hover:shadow-lg flex items-center gap-1.5"
                               >
-                                Save
+                                <Check className="w-3.5 h-3.5" /> Save Changes
                               </button>
                             </div>
                           </div>
@@ -1018,7 +1021,7 @@ export default function ChatContainer({
       </div>
 
       {/* Persistent bottom input bar - FLOATING GLASS ISLAND */}
-      <div className="pb-6 sm:pb-8 w-full pointer-events-none" style={{paddingTop:'40px', paddingLeft:'16px', paddingRight:'16px', paddingBottom:'max(32px, env(safe-area-inset-bottom))', zIndex:50, position:'absolute', bottom:0, left:0, right:0, background: 'linear-gradient(to top, var(--bg-main) 60%, transparent)'}}>
+      <div className="pb-6 sm:pb-8 w-full pointer-events-none" style={{paddingTop:'40px', paddingLeft:'16px', paddingRight:'16px', paddingBottom:'max(32px, env(safe-area-inset-bottom))', zIndex:50, position:'absolute', bottom:0, left:0, right:0, background: 'var(--bg-main)', opacity: 0.85, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderTop: '1px solid var(--border-color)'}}>
         
         {/* Scroll to bottom FAB */}
         {!atBottom && (
