@@ -550,7 +550,7 @@ export default function ChatContainer({
       </AnimatePresence>
       
       {/* Top Header - Replicated ChatGPT model dropdown and options */}
-      <header className="h-14 flex items-center justify-between px-4 bg-[var(--bg-main)]/60 backdrop-blur-2xl sticky top-0 z-20 select-none border-b border-[var(--border-color)]/30 transition-all duration-300 ease-out shadow-sm shadow-black/5 dark:shadow-none">
+      <header className="h-14 flex items-center justify-between px-4 liquid-glass sticky top-0 z-20 select-none transition-all duration-300 ease-out">
         <div className="flex items-center relative">
           {/* Collapse Open Menu Icon */}
           {!sidebarOpen && (
@@ -791,7 +791,7 @@ export default function ChatContainer({
                                 value={editingText}
                                 onChange={(e) => setEditingText(e.target.value)}
                                 rows={3}
-                                className="w-full p-3 text-sm bg-[var(--bg-main)]/50 backdrop-blur-xl border border-[var(--border-color)]/50 shadow-inner rounded-xl text-[var(--text-main)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-all resize-y"
+                                className="w-full p-3 text-sm liquid-glass rounded-xl text-[var(--text-main)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 transition-all resize-y"
                                 style={{ color: 'var(--text-main)' }}
                               />
                             </div>
