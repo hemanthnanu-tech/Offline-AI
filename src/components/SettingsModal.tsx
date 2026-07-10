@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Settings, Sliders, Database, Cpu, X, Check, Shield, Trash2, Download, RefreshCw, HelpCircle, Info, Mic, User, Terminal, HardDrive
-} from 'lucide-react';
+import { Sparkles, Settings, Sliders, Database, Cpu, X, Check, Shield, Trash2, Download, RefreshCw, HelpCircle, Info, Mic, User, Terminal, HardDrive } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { InferenceSettings, GGUFModelInfo } from '../types';
 import { CustomSelect } from './CustomSelect';

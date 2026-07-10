@@ -62,6 +62,16 @@ async function startServer() {
   let isModelLoaded = false;
   let isChatProcessing = false; // Concurrency lock
   
+  // Heartbeat tracking for automatic shutdown when tab is closed
+  let lastHeartbeatTime: number | null = null;
+  setInterval(() => {
+    if (lastHeartbeatTime && Date.now() - lastHeartbeatTime > 15000) {
+      logger.info("No heartbeat received for 15 seconds. Client tab likely closed. Initiating automatic shutdown...");
+      stopLlamaServer().then(() => process.exit(0)).catch(() => process.exit(1));
+      
+    }
+  }, 5000);
+  
   async function stopLlamaServer() {
     if (llamaProcess) {
       logger.info("Stopping existing llama-server process...");
@@ -219,6 +229,11 @@ async function startServer() {
   await loadGgufModel();
 
   // API endpoints
+
+  app.post("/api/heartbeat", (req, res) => {
+    lastHeartbeatTime = Date.now();
+    res.json({ status: "alive" });
+  });
 
   // Merged /api/health endpoint (was duplicated — now single authoritative definition)
   app.get("/api/health", (req, res) => {

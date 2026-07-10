@@ -13,6 +13,16 @@ export default function App() {
   const [activeModel, setActiveModel] = useState<GGUFModelInfo | null>(null);
   const [activeVisionModel, setActiveVisionModel] = useState<GGUFModelInfo | null>(null);
   
+  // Heartbeat system to keep the background server alive
+  useEffect(() => {
+    const sendHeartbeat = () => {
+      fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+    };
+    sendHeartbeat(); // initial ping
+    const interval = setInterval(sendHeartbeat, 5000);
+    return () => clearInterval(interval);
+  }, []);
+  
 
   // Settings
   const [settings, setSettings] = useState<InferenceSettings>(() => {
