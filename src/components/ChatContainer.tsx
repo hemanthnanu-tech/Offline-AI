@@ -38,12 +38,12 @@ const CodeBlock = ({ inline, className, children, generating, ...props }: any) =
           >
             {copied ? (
               <>
-                <Check className="w-3.5 h-3.5 text-[var(--accent)]" />
+                <Check className="w-3.5 h-3.5 text-[var(--accent)] animate-in zoom-in spin-in-12 duration-300" />
                 <span className="text-[var(--accent)] font-semibold font-sans">Copied</span>
               </>
             ) : (
               <>
-                <Copy className="w-3.5 h-3.5" />
+                <Copy className="w-3.5 h-3.5 hover:scale-110 transition-transform" />
                 <span className="font-sans">Copy</span>
               </>
             )}
@@ -117,6 +117,7 @@ export default function ChatContainer({
   onUnloadModel
 }: ChatContainerProps) {
   const [inputText, setInputText] = useState('');
+  const [pendingFiles, setPendingFiles] = useState<{name: string, content: string, type: string, size: number}[]>([]);
   const [copiedText, setCopiedText] = useState<string | null>(null);
   const [editingMsgIndex, setEditingMsgIndex] = useState<number | null>(null);
   const [editingText, setEditingText] = useState('');
@@ -148,6 +149,7 @@ export default function ChatContainer({
 
   // Fix 1: Auto-scroll to bottom tracking
   const [atBottom, setAtBottom] = useState(true);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
     const viewport = scrollViewportRef.current;
@@ -410,6 +412,8 @@ export default function ChatContainer({
     setIsParsing(true);
     
     try {
+      const textFilesToProcess: {name: string, content: string, type: string, size: number}[] = [];
+
       for (const file of files) {
         if (file.type.startsWith('image/')) {
           if (!isVisionCapable) {
@@ -420,7 +424,10 @@ export default function ChatContainer({
             const reader = new FileReader();
             reader.onload = (event) => {
               if (event.target?.result) {
-                setSelectedImages(prev => [...prev, event.target!.result as string]);
+                setSelectedImages(prev => {
+                  if (prev.includes(event.target!.result as string)) return prev;
+                  return [...prev, event.target!.result as string];
+                });
               }
               resolve();
             };
@@ -439,30 +446,22 @@ export default function ChatContainer({
             }
             fullText += '--- End of ' + file.name + ' ---\n\n';
             
-            const extract = window.confirm(`Do you want to extract the content of "${file.name}" into the chat box?\n\nClick OK to extract it as text.\nClick Cancel to attach it as a file pill instead.`);
-            if (extract) {
-              setInputText(prev => prev + fullText);
-            } else {
-              setSelectedFiles(prev => [...prev, { name: file.name, content: fullText }]);
-            }
-            toast.success(`Processed PDF: ${file.name}`);
+            textFilesToProcess.push({ name: file.name, content: fullText, type: file.type, size: file.size });
           } catch (error) {
             toast.error(`Failed to parse PDF: ${file.name}`);
           }
         } else {
-          // Assume text file
+          // Reject executables and binaries
+          if (file.name.match(/\.(exe|bin|zip|rar|dll|so|dylib|iso|img)$/i) || file.type === 'application/octet-stream') {
+             toast.error(`Cannot process binary file: ${file.name}`);
+             continue;
+          }
           await new Promise<void>((resolve) => {
             const reader = new FileReader();
             reader.onload = (event) => {
               if (event.target?.result) {
                 const fullText = '\n\n--- Content of ' + file.name + ' ---\n' + event.target.result + '\n--- End of ' + file.name + ' ---\n\n';
-                const extract = window.confirm(`Do you want to extract the content of "${file.name}" into the chat box?\n\nClick OK to extract it as text.\nClick Cancel to attach it as a file pill instead.`);
-                if (extract) {
-                  setInputText(prev => prev + fullText);
-                } else {
-                  setSelectedFiles(prev => [...prev, { name: file.name, content: fullText }]);
-                }
-                toast.success(`Processed Document: ${file.name}`);
+                textFilesToProcess.push({ name: file.name, content: fullText, type: file.type, size: file.size });
               }
               resolve();
             };
@@ -470,10 +469,48 @@ export default function ChatContainer({
           });
         }
       }
+
+      if (textFilesToProcess.length > 0) {
+        // Filter out duplicates if they already exist in selectedFiles
+        const uniqueFiles = textFilesToProcess.filter(nf => !selectedFiles.some(sf => sf.name === nf.name));
+        if (uniqueFiles.length < textFilesToProcess.length) {
+            toast.error("Skipped some duplicate files.");
+        }
+        if (uniqueFiles.length > 0) {
+            setPendingFiles(uniqueFiles);
+        }
+      }
     } finally {
       setIsParsing(false);
     }
   };
+
+  const handleProcessFilesConfirm = (decisions: {name: string, extract: boolean}[]) => {
+    let extractedText = '';
+    const newPills: {name: string, content: string}[] = [];
+
+    decisions.forEach(dec => {
+      const fileData = pendingFiles.find(f => f.name === dec.name);
+      if (fileData) {
+        if (dec.extract) {
+          extractedText += fileData.content;
+          toast.success(`Extracted: ${fileData.name}`);
+        } else {
+          newPills.push({ name: fileData.name, content: fileData.content });
+          toast.success(`Attached: ${fileData.name}`);
+        }
+      }
+    });
+
+    if (extractedText) {
+      setInputText(prev => prev + extractedText);
+    }
+    if (newPills.length > 0) {
+      setSelectedFiles(prev => [...prev, ...newPills]);
+    }
+    setPendingFiles([]);
+  };
+
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -1085,12 +1122,22 @@ export default function ChatContainer({
                     ))}
                     {typeof selectedFiles !== 'undefined' && selectedFiles.map((f, i) => (
                       <div key={'f'+i} className="relative group rounded-lg border border-[var(--border-color)] bg-[var(--bg-hover)] px-3 py-2 flex items-center gap-2 shadow-sm">
-                        <Code className="w-4 h-4 text-[var(--accent)]" />
-                        <span className="text-xs text-[var(--text-main)] truncate max-w-[120px]">{f.name}</span>
+                        <Code className="w-4 h-4 text-[var(--accent)] shrink-0" />
+                        <input 
+                          type="text" 
+                          value={f.name}
+                          onChange={(e) => {
+                            const newFiles = [...selectedFiles];
+                            newFiles[i].name = e.target.value;
+                            setSelectedFiles(newFiles);
+                          }}
+                          className="text-xs font-medium text-[var(--text-main)] bg-transparent outline-none w-[100px] hover:w-[150px] focus:w-[150px] transition-all truncate"
+                          title="Click to rename"
+                        />
                         <button
                           type="button"
                           onClick={() => setSelectedFiles(prev => prev.filter((_, idx) => idx !== i))}
-                          className="p-0.5 rounded-full hover:bg-[var(--border-color)] text-[var(--text-muted)] cursor-pointer"
+                          className="p-0.5 rounded-full hover:bg-[var(--border-color)] hover:text-red-500 text-[var(--text-muted)] cursor-pointer transition-colors"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>

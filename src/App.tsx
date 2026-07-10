@@ -82,7 +82,7 @@ export default function App() {
   const [generating, setGenerating] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [isModelLoading, setIsModelLoading] = useState(false);
-  const [hideNoModelBanner, setHideNoModelBanner] = useState(false);
+  const [hideNoModelBanner, setHideNoModelBanner] = useState(() => localStorage.getItem("hideNoModelBanner") === "true");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [availableModels, setAvailableModels] = useState<any[]>([]);
@@ -191,20 +191,41 @@ export default function App() {
   // Load initial settings, session history, and initial chat mock
   useEffect(() => {
     // Sessions load
-    const savedSessions = localStorage.getItem('gguf-chat-sessions');
-    if (savedSessions) {
-      try {
-        const parsed = JSON.parse(savedSessions);
-        setSessions(parsed);
-        if (parsed.length > 0) {
-          setActiveSessionId(parsed[0].id);
+    const loadSessions = () => {
+      const savedSessions = localStorage.getItem('gguf-chat-sessions');
+      if (savedSessions) {
+        try {
+          const parsed = JSON.parse(savedSessions);
+          if (Array.isArray(parsed)) {
+            setSessions(parsed);
+            // Only set active session if we don't have one, prevents jumping active chats
+            if (parsed.length > 0 && !activeSessionId) {
+              setActiveSessionId(parsed[0].id);
+            }
+          }
+        } catch (e) {
+          initializeDefaultSession();
         }
-      } catch (e) {
+      } else {
         initializeDefaultSession();
       }
-    } else {
-      initializeDefaultSession();
-    }
+    };
+    
+    loadSessions();
+    
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'gguf-chat-sessions') {
+        const savedSessions = localStorage.getItem('gguf-chat-sessions');
+        if (savedSessions) {
+          try {
+             setSessions(JSON.parse(savedSessions));
+          } catch(e){}
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    // Cleanup must be handled, but since this is inside a single giant useEffect without a return,
+    // we attach it safely. (Assuming this useEffect doesn't run multiple times without unmount).
 
     // Check loaded model from backend
     const checkModel = async () => {
@@ -295,7 +316,18 @@ export default function App() {
   // Sync sessions history to localStorage
   useEffect(() => {
     if (sessions.length > 0) {
-      localStorage.setItem('gguf-chat-sessions', JSON.stringify(sessions));
+      const timer = setTimeout(() => {
+        // Enforce quota limit (keep last 50 chats max)
+        const cappedSessions = sessions.slice(0, 50);
+        try {
+          localStorage.setItem('gguf-chat-sessions', JSON.stringify(cappedSessions));
+        } catch (e) {
+          console.warn("Storage quota exceeded, clearing old chats.", e);
+          const ultraCapped = sessions.slice(0, 10);
+          localStorage.setItem('gguf-chat-sessions', JSON.stringify(ultraCapped));
+        }
+      }, 500);
+      return () => clearTimeout(timer);
     }
   }, [sessions]);
 
@@ -538,7 +570,10 @@ export default function App() {
                           // Render thoughts natively in text to ensure streaming works perfectly
                           let displayContent = finalContent
                             .replace(/<think>/g, '---\n**🧠 Thought Process:**\n\n')
-                            .replace(/<\/think>/g, '\n\n---\n\n');
+                            .replace(/<\/think>/g, '\n\n---\n\n')
+                            .replace(/<\|eot_id\|>/g, '')
+                            .replace(/<\|im_end\|>/g, '')
+                            .replace(/<\/s>/g, '');
 
                           msgs[targetIdx] = { 
                           ...msgs[targetIdx], 
@@ -623,6 +658,14 @@ export default function App() {
 
   const handleSendMessage = useCallback((text: string, images?: string[], files?: {name: string, content: string}[]) => {
     if (generating) return;
+    if (!activeModel) {
+      alert("Please load a model first to chat.");
+      return;
+    }
+    
+    // Sanitize input text (remove ZWSP characters and trim)
+    const sanitizedText = text.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    if (!sanitizedText && (!images || images.length === 0) && (!files || files.length === 0)) return;
 
     const userMsg: ChatMessage = {
       id: `msg-user-${Date.now()}`,
@@ -785,7 +828,7 @@ export default function App() {
               No model is loaded. Add a <code className="text-xs bg-[var(--bg-hover)] px-1 rounded text-red-400">.gguf</code> model to the models folder to use the app.
             </p>
             <button 
-              onClick={() => setHideNoModelBanner(true)} 
+              onClick={() => { setHideNoModelBanner(true); localStorage.setItem("hideNoModelBanner", "true"); }} 
               className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-red-500/20 text-red-500 transition cursor-pointer"
             >
               <X className="w-4 h-4" />
