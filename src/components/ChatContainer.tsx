@@ -81,7 +81,7 @@ const CodeBlock = ({ inline, className, children, generating, ...props }: any) =
 
 interface ChatContainerProps {
   messages: ChatMessage[];
-  onSubmit: (text: string, images?: string[]) => void;
+  onSubmit: (text: string, images?: string[], files?: {name: string, content: string}[]) => void;
   onRegenerate: () => void;
   onEditMessage: (index: number, newText: string) => void;
   activeModel: GGUFModelInfo | null;
@@ -128,6 +128,7 @@ export default function ChatContainer({
   const [showAttachDropdown, setShowAttachDropdown] = useState(false);
   const attachDropdownRef = useRef<HTMLDivElement>(null);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<{name: string, content: string}[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Custom states
@@ -336,17 +337,19 @@ export default function ChatContainer({
 
   const handleSubmit = useCallback((e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if ((!inputText.trim() && selectedImages.length === 0) || generating) return;
+    if ((!inputText.trim() && selectedImages.length === 0 && selectedFiles.length === 0) || generating) return;
     
-    onSubmit(inputText.trim(), selectedImages);
+    onSubmit(inputText.trim(), selectedImages, selectedFiles);
     setInputText('');
     setSelectedImages([]);
+      if (typeof setSelectedFiles === "function") setSelectedFiles([]);
+    setSelectedFiles([]);
     
     // Reset the textarea height to default
     if (inputRef.current) {
       inputRef.current.style.height = 'auto';
     }
-  }, [inputText, selectedImages, generating, onSubmit]);
+  }, [inputText, selectedImages, selectedFiles, generating, onSubmit]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputText(e.target.value);
@@ -393,6 +396,7 @@ export default function ChatContainer({
     if (messages.length === 0) {
       setInputText('');
       setSelectedImages([]);
+      if (typeof setSelectedFiles === "function") setSelectedFiles([]);
       setEditingMsgIndex(null);
       setEditingText('');
       if (inputRef.current) {
@@ -434,8 +438,14 @@ export default function ChatContainer({
               fullText += pageText + '\n';
             }
             fullText += '--- End of ' + file.name + ' ---\n\n';
-            setInputText(prev => prev + fullText);
-            toast.success(`Attached PDF: ${file.name}`);
+            
+            const extract = window.confirm(`Do you want to extract the content of "${file.name}" into the chat box?\n\nClick OK to extract it as text.\nClick Cancel to attach it as a file pill instead.`);
+            if (extract) {
+              setInputText(prev => prev + fullText);
+            } else {
+              setSelectedFiles(prev => [...prev, { name: file.name, content: fullText }]);
+            }
+            toast.success(`Processed PDF: ${file.name}`);
           } catch (error) {
             toast.error(`Failed to parse PDF: ${file.name}`);
           }
@@ -445,8 +455,14 @@ export default function ChatContainer({
             const reader = new FileReader();
             reader.onload = (event) => {
               if (event.target?.result) {
-                setInputText(prev => prev + `\n\n--- Content of ${file.name} ---\n${event.target.result}\n--- End of ${file.name} ---\n\n`);
-                toast.success(`Attached Document: ${file.name}`);
+                const fullText = '\n\n--- Content of ' + file.name + ' ---\n' + event.target.result + '\n--- End of ' + file.name + ' ---\n\n';
+                const extract = window.confirm(`Do you want to extract the content of "${file.name}" into the chat box?\n\nClick OK to extract it as text.\nClick Cancel to attach it as a file pill instead.`);
+                if (extract) {
+                  setInputText(prev => prev + fullText);
+                } else {
+                  setSelectedFiles(prev => [...prev, { name: file.name, content: fullText }]);
+                }
+                toast.success(`Processed Document: ${file.name}`);
               }
               resolve();
             };
@@ -822,6 +838,16 @@ export default function ChatContainer({
                                 ))}
                               </div>
                             )}
+                            {msg.files && msg.files.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {msg.files.map((f, i) => (
+                                  <div key={'file'+i} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-main)]/50 border border-[var(--border-color)]/50 shadow-sm backdrop-blur-sm">
+                                    <Code className="w-4 h-4 text-[var(--accent)]" />
+                                    <span className="text-xs text-[var(--text-main)] max-w-[200px] truncate">{f.name}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -935,7 +961,12 @@ export default function ChatContainer({
                             className="p-1.5 hover:bg-[var(--bg-hover)] rounded-md hover:text-[var(--text-main)] transition cursor-pointer"
                             title="Copy"
                           >
-                            {copiedText === msg.content ? <Check className="w-4 h-4 text-[var(--accent)]" /> : <Copy className="w-4 h-4" />}
+                            {copiedText === msg.content ? (
+                              <div className="relative">
+                                <Check className="w-4 h-4 text-[var(--accent)]" />
+                                <motion.span initial={{opacity:0,y:10}} animate={{opacity:1,y:-20}} className="absolute -top-6 left-1/2 -translate-x-1/2 text-emerald-500 font-bold tracking-wider text-[10px] pointer-events-none">Copied!</motion.span>
+                              </div>
+                            ) : <Copy className="w-4 h-4" />}
                           </button>
                           <button
                             type="button"
@@ -1038,18 +1069,35 @@ export default function ChatContainer({
           <input type="file" multiple accept="image/*,.pdf,.md,.txt,.csv,.json,.log,.ts,.js,.tsx,.jsx,.html,.css" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
           <div style={{maxWidth:'680px', margin:'0 auto'}}>
             {/* Image previews */}
-            {selectedImages.length > 0 && (
-              <div className="flex gap-2 mb-2 no-scrollbar overflow-x-auto">
-                {selectedImages.map((img, i) => (
-                  <div key={i} className="relative group/img shrink-0">
-                    <img src={img} alt="preview" style={{width:'36px', height:'36px', objectFit:'cover', borderRadius:'8px', border:'1px solid var(--border-color)'}} />
-                    <button type="button" onClick={() => removeImage(i)} style={{position:'absolute', top:'-5px', right:'-5px', background:'#ef4444', color:'white', border:'none', borderRadius:'50%', width:'16px', height:'16px', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', opacity:0}} className="group-hover/img:opacity-100 transition">
-                      <X style={{width:'10px', height:'10px'}} />
-                    </button>
+            {(selectedImages.length > 0 || (typeof selectedFiles !== 'undefined' && selectedFiles.length > 0)) && (
+                  <div className="flex flex-wrap gap-2 p-3 bg-[var(--bg-main)]/30 backdrop-blur-sm border-b border-[var(--border-color)]/30">
+                    {selectedImages.map((img, i) => (
+                      <div key={i} className="relative group rounded-lg overflow-hidden border border-[var(--border-color)] w-16 h-16 shadow-sm">
+                        <img src={img} alt="upload" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(i)}
+                          className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                        >
+                          <X className="w-5 h-5 text-white" />
+                        </button>
+                      </div>
+                    ))}
+                    {typeof selectedFiles !== 'undefined' && selectedFiles.map((f, i) => (
+                      <div key={'f'+i} className="relative group rounded-lg border border-[var(--border-color)] bg-[var(--bg-hover)] px-3 py-2 flex items-center gap-2 shadow-sm">
+                        <Code className="w-4 h-4 text-[var(--accent)]" />
+                        <span className="text-xs text-[var(--text-main)] truncate max-w-[120px]">{f.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFiles(prev => prev.filter((_, idx) => idx !== i))}
+                          className="p-0.5 rounded-full hover:bg-[var(--border-color)] text-[var(--text-muted)] cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )}
             
             {/* @ Mention Prompt Dropdown */}
             {showPromptDropdown && filteredDropdownPrompts.length > 0 && (

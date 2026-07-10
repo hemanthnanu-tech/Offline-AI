@@ -31,6 +31,7 @@ export interface ChatMessage {
   timestamp: string;
   tokensPerSecond?: number;
   images?: string[];
+  files?: {name: string, content: string}[];
   thoughtProcess?: string;
   isThinking?: boolean;
   generationStats?: {

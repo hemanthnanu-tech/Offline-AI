@@ -621,14 +621,15 @@ export default function App() {
     }
   };
 
-  const handleSendMessage = useCallback((text: string, images?: string[]) => {
+  const handleSendMessage = useCallback((text: string, images?: string[], files?: {name: string, content: string}[]) => {
     if (generating) return;
 
     const userMsg: ChatMessage = {
       id: `msg-user-${Date.now()}`,
       role: 'user',
-      content: text,
+      content: text + (files && files.length > 0 ? (text ? '\n\n' : '') + files.map(f => `--- Content of ${f.name} ---\n${f.content}\n--- End of ${f.name} ---`).join('\n\n') : ''),
       images: images && images.length > 0 ? images : undefined,
+      files: files && files.length > 0 ? files : undefined,
       timestamp: new Date().toLocaleTimeString(),
     };
 
