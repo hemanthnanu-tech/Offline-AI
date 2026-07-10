@@ -40,7 +40,44 @@ export default function SettingsModal({
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [localSettings, setLocalSettings] = useState<InferenceSettings>({ ...settings });
+  
   const [reloadingModel, setReloadingModel] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{name: string, progress: number} | null>(null);
+  
+  const handleUploadModel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+    e.target.value = ''; // Reset input
+    
+    if (!file.name.endsWith('.gguf')) {
+      setAlertMsg('Only .gguf files are supported.');
+      return;
+    }
+    
+    setUploadProgress({ name: file.name, progress: 0 });
+    
+    try {
+      const res = await fetch(`/api/upload-model?name=${encodeURIComponent(file.name)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: file
+      });
+      
+      const data = await res.json();
+      if (data.success) {
+        setAlertMsg(`Successfully uploaded ${file.name}. Please refresh directory.`);
+        if (onRefreshModels) onRefreshModels();
+      } else {
+        setAlertMsg('Upload failed.');
+      }
+    } catch (err) {
+      console.error(err);
+      setAlertMsg('Error uploading model.');
+    } finally {
+      setUploadProgress(null);
+    }
+  };
+
   const [confirmDialog, setConfirmDialog] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
   
@@ -626,16 +663,40 @@ export default function SettingsModal({
                         )}
                       </div>
 
+                      
                       {/* Available Models List */}
                       <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[14px] font-medium text-[var(--text-main)]">Available Local Models</span>
-                          <span className="text-[11px] text-[var(--text-muted)] px-2 py-0.5 bg-[var(--bg-hover)] rounded-md border border-[var(--border-color)]">
-                            models/ directory
-                          </span>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                          <div>
+                            <span className="text-[14px] font-medium text-[var(--text-main)] block">Manage Models</span>
+                            <span className="text-[11px] text-[var(--text-muted)]">Upload new models or select an active one</span>
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <label className="px-3 py-1.5 bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)]/80 text-[12px] font-semibold text-[var(--text-main)] rounded-lg transition border border-[var(--border-color)] cursor-pointer flex items-center gap-1.5">
+                              <Download className="w-3.5 h-3.5" />
+                              Add LLM (.gguf)
+                              <input type="file" accept=".gguf" className="hidden" onChange={handleUploadModel} />
+                            </label>
+                            <label className="px-3 py-1.5 bg-[var(--accent)]/10 text-[var(--accent)] hover:bg-[var(--accent)]/20 text-[12px] font-semibold rounded-lg transition cursor-pointer flex items-center gap-1.5">
+                              <Download className="w-3.5 h-3.5" />
+                              Add Vision (mmproj)
+                              <input type="file" accept=".gguf" className="hidden" onChange={handleUploadModel} />
+                            </label>
+                          </div>
                         </div>
+
+                        {uploadProgress && (
+                          <div className="bg-[var(--bg-hover)] p-3 rounded-xl border border-[var(--border-color)] animate-pulse">
+                            <p className="text-[12px] text-[var(--text-main)] font-semibold flex items-center gap-2">
+                              <div className="w-3 h-3 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin"></div>
+                              Uploading {uploadProgress.name}... (Please wait, large files take a moment)
+                            </p>
+                          </div>
+                        )}
                         
                         {availableModels.length > 0 ? (
+
                           <div className="border border-[var(--border-color)] rounded-lg overflow-hidden divide-y divide-[var(--border-color)]">
                             {availableModels.map(model => (
                               <div key={model} className="flex items-center justify-between p-3 hover:bg-[var(--bg-hover)] transition">

@@ -517,6 +517,30 @@ async function startServer() {
   }
 
   const HOST = process.env.HOST || '127.0.0.1';
+  
+  // Upload Model API
+  app.post('/api/upload-model', (req, res) => {
+    const fileName = req.query.name;
+    if (!fileName) {
+      return res.status(400).json({ error: 'Missing name query parameter' });
+    }
+    const modelsDir = require('path').join(process.cwd(), 'models');
+    const filePath = require('path').join(modelsDir, fileName);
+    
+    // Ensure directory exists
+    const fsSync = require('fs');
+    fsSync.mkdirSync(modelsDir, { recursive: true });
+    
+    const writeStream = fsSync.createWriteStream(filePath);
+    req.pipe(writeStream);
+    
+    req.on('end', () => res.json({ success: true }));
+    req.on('error', (err) => {
+      console.error('Upload error', err);
+      res.status(500).json({ error: err.message });
+    });
+  });
+  
   app.listen(PORT, HOST, () => {
   console.clear();
   console.log('\x1b[36m%s\x1b[0m', '=======================================================');
