@@ -789,7 +789,7 @@ export default function App() {
       {isModelLoading && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-[var(--modal-bg)] border border-[var(--border-color)] rounded-2xl shadow-2xl p-8 flex flex-col items-center max-w-sm w-full mx-4 text-center">
-             <div className="w-12 h-12 border-4 border-[var(--accent)]/30 border-t-indigo-500 rounded-full animate-spin mb-4" />
+             <div className="w-12 h-12 border-4 border-[var(--accent)]/30 border-t-[var(--accent)] rounded-full animate-spin mb-4" />
              <h3 className="text-lg font-bold text-[var(--text-main)] mb-2">Loading Model...</h3>
              <p className="text-sm text-[var(--text-muted)]">Please wait while the AI model is being loaded into memory. This may take up to a minute depending on hardware.</p>
           </div>
@@ -901,7 +901,7 @@ export default function App() {
       {showDemoPopup && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
           <div className="bg-[var(--bg-main)] border border-[var(--border-color)] rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-            <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent p-6 text-center border-b border-[var(--border-color)]">
+            <div className="bg-gradient-to-r from-[var(--accent)]/10 via-[var(--accent)]/5 to-transparent p-6 text-center border-b border-[var(--border-color)]">
               <div className="w-14 h-14 rounded-full bg-[var(--bg-main)] shadow-md flex items-center justify-center mx-auto mb-4 border border-[var(--border-color)]">
                 <Globe className="w-7 h-7 text-[var(--accent)]" />
               </div>
@@ -924,7 +924,7 @@ export default function App() {
                   onClick={() => {
                     window.open('https://github.com/hemanthnanu-tech/Offline-AI', '_blank');
                   }}
-                  className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-semibold rounded-xl transition shadow-sm hover:shadow-md cursor-pointer"
+                  className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--accent-fg)] font-semibold rounded-xl transition shadow-sm hover:shadow-md cursor-pointer"
                 >
                   View Project on GitHub
                 </button>

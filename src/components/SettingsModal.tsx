@@ -225,7 +225,7 @@ export default function SettingsModal({
               <button
                 type="button"
                 onClick={() => setAlertMsg(null)}
-                className="px-4 py-2 text-xs font-semibold text-white rounded-lg transition cursor-pointer"
+                className="px-4 py-2 text-xs font-semibold text-[var(--accent-fg)] rounded-lg transition cursor-pointer"
                 style={{ backgroundColor: 'var(--accent)' }}
               >
                 OK
@@ -458,7 +458,7 @@ export default function SettingsModal({
                                   : 'opacity-70 hover:opacity-100 hover:scale-110'
                               }`}
                             >
-                              {accentColor === c.id && <Check className="w-4 h-4 text-white stroke-[3px]" />}
+                              {accentColor === c.id && <Check className={`w-4 h-4 stroke-[3px] ${c.id === "monochrome" ? "text-gray-400 drop-shadow-sm" : "text-white"}`} />}
                             </button>
                           ))}
                         </div>
@@ -709,7 +709,7 @@ export default function SettingsModal({
                                   className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition shrink-0 ${
                                     activeModel?.fileName === model
                                       ? 'bg-[var(--bg-hover)] text-[var(--text-muted)] cursor-not-allowed'
-                                      : 'bg-[var(--accent)] text-white hover:opacity-90 cursor-pointer'
+                                      : 'bg-[var(--accent)] text-[var(--accent-fg)] hover:opacity-90 cursor-pointer'
                                   }`}
                                 >
                                   {activeModel?.fileName === model ? 'Loaded' : 'Load Model'}
@@ -1175,7 +1175,7 @@ export default function SettingsModal({
                   style={{ backgroundColor: 'var(--accent)' }}
                   onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--accent-hover)'}
                   onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'var(--accent)'}
-                  className="flex items-center gap-1.5 px-4 py-2 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-2 text-[var(--accent-fg)] rounded-lg text-xs font-semibold transition cursor-pointer"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>Apply Changes</span>
