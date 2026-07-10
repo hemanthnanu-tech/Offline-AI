@@ -8,6 +8,8 @@ import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import * as pdfjsLib from 'pdfjs-dist';
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 import { ChatMessage, InferenceSettings, GGUFModelInfo } from '../types';
 import { PromptItem, PREADDED_PROMPTS } from './LibraryModal';
 
@@ -416,42 +418,69 @@ export default function ChatContainer({
     }
   }, [messages.length]);
 
-  const processImageFiles = (files: File[]) => {
-    // Strict Vision model check
+  const processFiles = async (files: File[]) => {
     const isVisionCapable = activeVisionModel || (activeModel && (activeModel.fileName.toLowerCase().includes('vision') || activeModel.fileName.toLowerCase().includes('llava')));
-    if (!isVisionCapable) {
-      toast.error("Vision model required! Please load an mmproj vision model in Settings to analyze images.");
-      return;
-    }
     
-    files.forEach(file => {
-      if (!file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setSelectedImages(prev => [...prev, event.target!.result as string]);
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        if (!isVisionCapable) {
+          toast.error("Vision model required to process images! Please load an mmproj model.");
+          continue;
         }
-      };
-      reader.readAsDataURL(file);
-    });
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) {
+            setSelectedImages(prev => [...prev, event.target!.result as string]);
+          }
+        };
+        reader.readAsDataURL(file);
+      } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          let fullText = `\n\n--- Content of ${file.name} ---\n`;
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map((item: any) => item.str).join(' ');
+            fullText += pageText + '\n';
+          }
+          fullText += `--- End of ${file.name} ---\n\n`;
+          setInputText(prev => prev + fullText);
+          toast.success(`Attached PDF: ${file.name}`);
+        } catch (error) {
+          toast.error(`Failed to parse PDF: ${file.name}`);
+        }
+      } else {
+        // Assume text file
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) {
+            setInputText(prev => prev + `\n\n--- Content of ${file.name} ---\n${event.target.result}\n--- End of ${file.name} ---\n\n`);
+            toast.success(`Attached Document: ${file.name}`);
+          }
+        };
+        reader.readAsText(file);
+      }
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    processImageFiles(files);
+    processFiles(files);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
     if (e.clipboardData.files.length > 0) {
-      processImageFiles(Array.from(e.clipboardData.files));
+      processFiles(Array.from(e.clipboardData.files));
     }
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files.length > 0) {
-      processImageFiles(Array.from(e.dataTransfer.files));
+      processFiles(Array.from(e.dataTransfer.files));
     }
   };
 
@@ -974,7 +1003,7 @@ export default function ChatContainer({
             </button>
           </div>
         )}
-          <input type="file" multiple accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
+          <input type="file" multiple accept="image/*,.pdf,.md,.txt,.csv,.json,.log,.ts,.js,.tsx,.jsx,.html,.css" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
           <div style={{maxWidth:'680px', margin:'0 auto'}}>
             {/* Image previews */}
             {selectedImages.length > 0 && (
@@ -1040,14 +1069,10 @@ export default function ChatContainer({
               <button
                 type="button"
                 onClick={() => {
-                  if (!activeVisionModel) {
-                    toast.error('No vision model loaded. Add an mmproj file to models/ folder to enable image analysis.');
-                    return;
-                  }
                   fileInputRef.current?.click();
                 }}
                 style={{background:'none', border:'none', cursor:'pointer', padding:'4px', marginRight:'8px', color:'var(--text-main)', display:'flex', alignItems:'center', flexShrink:0}}
-                title="Attach Image"
+                title="Attach File or Image"
               >
                 <Plus style={{width:'20px', height:'20px'}} />
               </button>
