@@ -121,6 +121,8 @@ export default function ChatContainer({
   const [isListening, setIsListening] = useState(false);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [selection, setSelection] = useState<{ text: string; x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
   const [showAttachDropdown, setShowAttachDropdown] = useState(false);
   const attachDropdownRef = useRef<HTMLDivElement>(null);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
@@ -422,48 +424,59 @@ export default function ChatContainer({
 
   const processFiles = async (files: File[]) => {
     const isVisionCapable = !!activeVisionModel;
+    setIsParsing(true);
     
-    for (const file of files) {
-      if (file.type.startsWith('image/')) {
-        if (!isVisionCapable) {
-          toast.error("Vision model required to process images! Please load an mmproj model.");
-          continue;
+    try {
+      for (const file of files) {
+        if (file.type.startsWith('image/')) {
+          if (!isVisionCapable) {
+            toast.error("Vision model required to process images! Please load an mmproj model.");
+            continue;
+          }
+          await new Promise<void>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              if (event.target?.result) {
+                setSelectedImages(prev => [...prev, event.target!.result as string]);
+              }
+              resolve();
+            };
+            reader.readAsDataURL(file);
+          });
+        } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+          try {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let fullText = '\n\n--- Content of ' + file.name + ' ---\n';
+            for (let i = 1; i <= pdf.numPages; i++) {
+              const page = await pdf.getPage(i);
+              const textContent = await page.getTextContent();
+              const pageText = textContent.items.map((item: any) => item.str).join(' ');
+              fullText += pageText + '\n';
+            }
+            fullText += '--- End of ' + file.name + ' ---\n\n';
+            setInputText(prev => prev + fullText);
+            toast.success(`Attached PDF: ${file.name}`);
+          } catch (error) {
+            toast.error(`Failed to parse PDF: ${file.name}`);
+          }
+        } else {
+          // Assume text file
+          await new Promise<void>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              if (event.target?.result) {
+                setInputText(prev => prev + `\n\n--- Content of ${file.name} ---\n${event.target.result}\n--- End of ${file.name} ---\n\n`);
+                toast.success(`Attached Document: ${file.name}`);
+              }
+              resolve();
+            };
+            reader.readAsText(file);
+          });
         }
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          if (event.target?.result) {
-            setSelectedImages(prev => [...prev, event.target!.result as string]);
-          }
-        };
-        reader.readAsDataURL(file);
-      } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-        try {
-          const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-          let fullText = `\n\n--- Content of ${file.name} ---\n`;
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items.map((item: any) => item.str).join(' ');
-            fullText += pageText + '\n';
-          }
-          fullText += `--- End of ${file.name} ---\n\n`;
-          setInputText(prev => prev + fullText);
-          toast.success(`Attached PDF: ${file.name}`);
-        } catch (error) {
-          toast.error(`Failed to parse PDF: ${file.name}`);
-        }
-      } else {
-        // Assume text file
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          if (event.target?.result) {
-            setInputText(prev => prev + `\n\n--- Content of ${file.name} ---\n${event.target.result}\n--- End of ${file.name} ---\n\n`);
-            toast.success(`Attached Document: ${file.name}`);
-          }
-        };
-        reader.readAsText(file);
       }
+    } finally {
+      setIsParsing(false);
     }
   };
 
@@ -532,7 +545,30 @@ export default function ChatContainer({
 
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[var(--bg-main)] relative overflow-hidden" id="chat-container">
+    <div 
+      className="flex-1 flex flex-col h-full bg-[var(--bg-main)] relative overflow-hidden" 
+      id="chat-container"
+      onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
+      onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); if (e.currentTarget === e.target) setIsDragging(false); }}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); if (e.dataTransfer.files.length > 0) processFiles(Array.from(e.dataTransfer.files)); }}
+    >
+      <AnimatePresence>
+        {isDragging && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-[var(--bg-main)]/80 backdrop-blur-sm border-4 border-dashed border-[var(--accent)] rounded-xl m-4 pointer-events-none"
+          >
+            <div className="p-6 bg-[var(--bg-hover)] rounded-full mb-4 shadow-premium">
+              <Download className="w-12 h-12 text-[var(--accent)]" />
+            </div>
+            <h2 className="text-2xl font-bold text-[var(--text-main)]">Drop files to attach</h2>
+            <p className="text-[var(--text-muted)] mt-2 font-mono text-sm">Supports images, PDFs, Markdown, and text files</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* Top Header - Replicated ChatGPT model dropdown and options */}
       <header className="h-14 flex items-center justify-between px-4 bg-[var(--bg-main)]/80 backdrop-blur-xl sticky top-0 z-20 select-none border-b border-transparent transition-all duration-300 ease-out">
@@ -1076,13 +1112,14 @@ export default function ChatContainer({
                   style={{background:'none', border:'none', cursor:'pointer', padding:'4px', marginRight:'8px', color:'var(--text-main)', display:'flex', alignItems:'center', flexShrink:0}}
                   title="Attach File or Image"
                 >
-                  <Plus style={{width:'20px', height:'20px'}} />
+                  {isParsing ? <Loader2 className="w-5 h-5 text-[var(--accent)] animate-spin" /> : <Plus style={{width:'20px', height:'20px'}} />}
                 </button>
                 
                 {showAttachDropdown && (
-                  <div className="absolute bottom-full left-0 mb-2 w-48 bg-[var(--bg-main)] border border-[var(--border-color)] rounded-xl shadow-premium overflow-hidden z-50 flex flex-col p-1.5">
+                  <div className="absolute bottom-full left-0 mb-2 w-56 bg-[var(--bg-main)] border border-[var(--border-color)] rounded-xl shadow-premium overflow-hidden z-50 flex flex-col p-1.5">
                     <button
                       type="button"
+                      disabled={!activeVisionModel}
                       onClick={() => {
                         if (fileInputRef.current) {
                           fileInputRef.current.accept = 'image/*';
@@ -1090,9 +1127,12 @@ export default function ChatContainer({
                         }
                         setShowAttachDropdown(false);
                       }}
-                      className="text-left px-3 py-2 text-sm text-[var(--text-main)] hover:bg-[var(--bg-hover)] rounded-lg flex items-center gap-2.5 transition-colors"
+                      className={`text-left px-3 py-2 text-sm text-[var(--text-main)] rounded-lg flex flex-col gap-0.5 transition-colors ${activeVisionModel ? 'hover:bg-[var(--bg-hover)] cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
                     >
-                      <ImageIcon className="w-4 h-4 text-blue-500" /> Image
+                      <div className="flex items-center gap-2.5">
+                        <ImageIcon className="w-4 h-4 text-blue-500" /> <span className="font-semibold">Image</span>
+                      </div>
+                      <span className="text-[10px] text-[var(--text-muted)] ml-6">{activeVisionModel ? 'Supported: png, jpg, webp' : 'Requires mmproj vision model'}</span>
                     </button>
                     <button
                       type="button"
@@ -1103,9 +1143,12 @@ export default function ChatContainer({
                         }
                         setShowAttachDropdown(false);
                       }}
-                      className="text-left px-3 py-2 text-sm text-[var(--text-main)] hover:bg-[var(--bg-hover)] rounded-lg flex items-center gap-2.5 transition-colors"
+                      className="text-left px-3 py-2 text-sm text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer rounded-lg flex flex-col gap-0.5 transition-colors"
                     >
-                      <BookOpen className="w-4 h-4 text-emerald-500" /> PDF Document
+                      <div className="flex items-center gap-2.5">
+                        <BookOpen className="w-4 h-4 text-emerald-500" /> <span className="font-semibold">PDF Document</span>
+                      </div>
+                      <span className="text-[10px] text-[var(--text-muted)] ml-6">Extracts text automatically</span>
                     </button>
                     <button
                       type="button"
@@ -1116,9 +1159,12 @@ export default function ChatContainer({
                         }
                         setShowAttachDropdown(false);
                       }}
-                      className="text-left px-3 py-2 text-sm text-[var(--text-main)] hover:bg-[var(--bg-hover)] rounded-lg flex items-center gap-2.5 transition-colors"
+                      className="text-left px-3 py-2 text-sm text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer rounded-lg flex flex-col gap-0.5 transition-colors"
                     >
-                      <Code className="w-4 h-4 text-amber-500" /> Text / Code
+                      <div className="flex items-center gap-2.5">
+                        <Code className="w-4 h-4 text-amber-500" /> <span className="font-semibold">Text / Code File</span>
+                      </div>
+                      <span className="text-[10px] text-[var(--text-muted)] ml-6">Supported: .md, .txt, .js, .py, etc.</span>
                     </button>
                   </div>
                 )}
