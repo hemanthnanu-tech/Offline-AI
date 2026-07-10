@@ -4,7 +4,7 @@ import ChatContainer from './components/ChatContainer';
 import SettingsModal from './components/SettingsModal';
 import LibraryModal from './components/LibraryModal';
 import { ChatSession, ChatMessage, InferenceSettings, GGUFModelInfo } from './types';
-import { Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff, Loader2, Globe, DownloadCloud, ChevronDown, ChevronUp, Square, Cpu, HardDrive, AlertCircle } from 'lucide-react';
+import {  Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff, Loader2, Globe, DownloadCloud, ChevronDown, ChevronUp, Square, Cpu, HardDrive, AlertCircle , X } from 'lucide-react';
 
 export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -82,6 +82,7 @@ export default function App() {
   const [generating, setGenerating] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [isModelLoading, setIsModelLoading] = useState(false);
+  const [hideNoModelBanner, setHideNoModelBanner] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [availableModels, setAvailableModels] = useState<any[]>([]);

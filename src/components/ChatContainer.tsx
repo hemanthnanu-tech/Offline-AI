@@ -227,11 +227,11 @@ export default function ChatContainer({
     };
     
     window.addEventListener('insert-prompt', handleInsertPrompt);
-    document.addEventListener('mouseup', handleMouseUp);
+    
     
     return () => {
       window.removeEventListener('insert-prompt', handleInsertPrompt);
-      document.removeEventListener('mouseup', handleMouseUp);
+      
     };
   }, []);
 
@@ -242,29 +242,6 @@ export default function ChatContainer({
       inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 200)}px`;
     }
   }, [inputText]);
-
-  const handleMouseUp = (e: MouseEvent) => {
-    // Timeout to allow selection to register completely
-    setTimeout(() => {
-      const sel = window.getSelection();
-      if (sel && sel.toString().trim().length > 0) {
-        const range = sel.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        
-        // Ensure it's inside the messages scroller
-        const scroller = document.getElementById('messages-scroller');
-        if (scroller && scroller.contains(range.startContainer)) {
-          setSelection({
-            text: sel.toString().trim(),
-            x: rect.left + (rect.width / 2),
-            y: rect.top + window.scrollY
-          });
-          return;
-        }
-      }
-      setSelection(null);
-    }, 10);
-  };
 
   useEffect(() => {
     // Initialize Web Speech API for Dictation
@@ -754,38 +731,7 @@ export default function ChatContainer({
           </div>
       </header>
 
-      {/* Floating Selection Toolbar */}
-      <AnimatePresence>
-        {selection && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="floating-toolbar flex gap-1 items-center"
-            style={{ top: selection.y, left: selection.x }}
-          >
-            <button 
-              onClick={() => {
-                navigator.clipboard.writeText(selection.text);
-                setSelection(null);
-              }}
-              className="toolbar-btn text-xs font-semibold flex items-center gap-1.5"
-            >
-              <Copy className="w-3.5 h-3.5" /> Copy
-            </button>
-            <button 
-              onClick={() => {
-                setInputText(prev => prev + (prev ? ' ' : '') + `"${selection.text}" `);
-                setSelection(null);
-                inputRef.current?.focus();
-              }}
-              className="toolbar-btn text-xs font-semibold flex items-center gap-1.5"
-            >
-              <Quote className="w-3.5 h-3.5" /> Quote
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      
 
       {/* Chat messages viewport */}
       <div ref={scrollViewportRef} className="flex-1 overflow-y-auto scroll-smooth transition-all duration-300 ease-in-out relative" id="messages-scroller">
