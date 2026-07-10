@@ -1,21 +1,29 @@
 @echo off
-title Offline AI
-color 0F
-mode con: cols=70 lines=20
+title Offline AI - Secure Local Environment
+color 0B
+mode con: cols=80 lines=22
 
 echo.
-echo   [Offline AI] Starting local server environment...
+echo    ==========================================================================
+echo                            O F F L I N E   A I
+echo    ==========================================================================
+echo       100%% Private. Fully Local. Highly Secure AI Chat Experience.
+echo    --------------------------------------------------------------------------
+echo       Designed ^& Developed by: Hemanth Kumar K
+echo    ==========================================================================
+echo.
+echo    [*] Starting local server environment...
 echo.
 
-echo   ^> Cleaning up previous sessions...
+echo    [*] Cleaning up previous sessions...
 for /f "tokens=5" %%a in ('netstat -aon ^| find ":3000"') do taskkill /f /pid %%a >nul 2>&1
 
-echo   ^> Starting backend and frontend services...
+echo    [*] Starting secure backend and frontend services...
 echo Set WshShell = CreateObject("WScript.Shell") > "%temp%\hidden_start.vbs"
 echo WshShell.Run "cmd.exe /c npm run start", 0, False >> "%temp%\hidden_start.vbs"
 wscript "%temp%\hidden_start.vbs"
 
-echo   ^> Waiting for server to become ready (this may take a few seconds)...
+echo    [*] Waiting for local server to become fully ready...
 :WAIT_LOOP
 powershell -Command "try { $response = Invoke-WebRequest -Uri http://localhost:3000 -UseBasicParsing -ErrorAction Stop; if ($response.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
@@ -23,18 +31,17 @@ if %ERRORLEVEL% NEQ 0 (
     goto WAIT_LOOP
 )
 
-echo   ^> Server is fully loaded and ready!
+echo    [*] Server is fully loaded and secure!
 echo.
-echo   Opening interface in browser in...
-echo   3
+echo    [*] Opening interface in your secure browser environment in:
+echo    3...
 timeout /t 1 /nobreak >nul
-echo   2
+echo    2...
 timeout /t 1 /nobreak >nul
-echo   1
+echo    1...
 timeout /t 1 /nobreak >nul
 
-echo   Launching!
+echo    Launching!
 start chrome http://localhost:3000
 
-:: Let the terminal close automatically so it's clean and simple
 exit
