@@ -83,8 +83,7 @@ export default function SettingsModal({
       purple: { main: '#af52de', hover: '#963ec8', fg: '#ffffff' },
       teal: { main: '#30b0c7', hover: '#258ea2', fg: '#ffffff' },
       green: { main: '#34c759', hover: '#28a745', fg: '#ffffff' },
-      black: { main: '#000000', hover: '#333333', fg: '#ffffff' },
-      white: { main: '#ffffff', hover: '#f3f4f6', fg: '#000000' },
+      monochrome: document.documentElement.classList.contains('dark') ? { main: '#ffffff', hover: '#e5e7eb', fg: '#000000' } : { main: '#000000', hover: '#374151', fg: '#ffffff' },
       brown: { main: '#8b4513', hover: '#5c2e0b', fg: '#ffffff' }
     };
     const activeAccent = accentColors[accentColor] || accentColors.blue;
@@ -410,15 +409,14 @@ export default function SettingsModal({
                             { id: 'purple', color: '#af52de' },
                             { id: 'teal', color: '#30b0c7' },
                             { id: 'green', color: '#34c759' },
-                            { id: 'black', color: '#000000' },
-                            { id: 'white', color: '#ffffff' },
+                            { id: 'monochrome', color: 'conic-gradient(from 180deg at 50% 50%, #ffffff 0deg, #ffffff 180deg, #000000 180deg, #000000 360deg)' },
                             { id: 'brown', color: '#8b4513' }
                           ].map(c => (
                             <button
                               key={c.id}
                               type="button"
                               onClick={() => setAccentColor(c.id)}
-                              style={{ backgroundColor: c.color }}
+                              style={{ background: c.color }}
                               className={`w-7 h-7 rounded-full cursor-pointer flex items-center justify-center transition-all shadow-sm ${
                                 accentColor === c.id 
                                   ? 'ring-2 ring-offset-2 ring-offset-[var(--modal-bg)] ring-[var(--text-main)] scale-110 opacity-100' 
@@ -1088,8 +1086,7 @@ export default function SettingsModal({
                       purple: { main: '#af52de', hover: '#963ec8', fg: '#ffffff' },
                       teal: { main: '#30b0c7', hover: '#258ea2', fg: '#ffffff' },
                       green: { main: '#34c759', hover: '#28a745', fg: '#ffffff' },
-                      black: { main: '#000000', hover: '#333333', fg: '#ffffff' },
-                      white: { main: '#ffffff', hover: '#f3f4f6', fg: '#000000' },
+                      monochrome: document.documentElement.classList.contains('dark') ? { main: '#ffffff', hover: '#e5e7eb', fg: '#000000' } : { main: '#000000', hover: '#374151', fg: '#ffffff' },
                       brown: { main: '#8b4513', hover: '#5c2e0b', fg: '#ffffff' }
                     };
                     const originalAccent = accentColors[settings.accentColor || 'blue'] || accentColors.blue;

@@ -149,8 +149,9 @@ export default function App() {
       purple: { main: '#af52de', hover: '#963ec8', fg: '#ffffff' },
       teal: { main: '#30b0c7', hover: '#258ea2', fg: '#ffffff' },
       green: { main: '#34c759', hover: '#28a745', fg: '#ffffff' },
-      black: { main: '#000000', hover: '#333333', fg: '#ffffff' },
-      white: { main: '#ffffff', hover: '#f3f4f6', fg: '#000000' },
+      monochrome: theme === 'dark' 
+        ? { main: '#ffffff', hover: '#e5e7eb', fg: '#000000' }
+        : { main: '#000000', hover: '#374151', fg: '#ffffff' },
       brown: { main: '#8b4513', hover: '#5c2e0b', fg: '#ffffff' }
     };
     const activeAccent = accentColors[settings.accentColor] || accentColors.blue;
@@ -164,7 +165,7 @@ export default function App() {
       document.documentElement.classList.remove('high-contrast');
     }
 
-    }, [settings.accentColor, settings.contrast]);
+    }, [settings.accentColor, settings.contrast, theme]);
 
   // Load initial settings, session history, and initial chat mock
   useEffect(() => {

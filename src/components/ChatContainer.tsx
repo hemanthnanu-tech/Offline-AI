@@ -1131,8 +1131,13 @@ export default function ChatContainer({
                     >
                       <div className="flex items-center gap-2.5">
                         <ImageIcon className="w-4 h-4 text-blue-500" /> <span className="font-semibold">Image</span>
+                        {!activeVisionModel && (
+                          <div className="ml-auto flex items-center justify-center w-4 h-4 rounded-full bg-red-500/10 text-red-500" title="Load an mmproj model in the top right menu to enable image uploads">
+                            <AlertCircle className="w-3 h-3" />
+                          </div>
+                        )}
                       </div>
-                      <span className="text-[10px] text-[var(--text-muted)] ml-6">{activeVisionModel ? 'Supported: png, jpg, webp' : 'Requires mmproj vision model'}</span>
+                      <span className="text-[10px] text-[var(--text-muted)] ml-6">{activeVisionModel ? 'Supported: png, jpg, webp' : 'Requires mmproj vision model (Load via top right menu)'}</span>
                     </button>
                     <button
                       type="button"
