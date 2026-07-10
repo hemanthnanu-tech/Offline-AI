@@ -1,41 +1,40 @@
 @echo off
-title OFFLINE AI - Local Server Terminal
-color 0b
-mode con: cols=100 lines=32
+title Offline AI
+color 0F
+mode con: cols=70 lines=20
 
 echo.
-echo   ==================================================================================================
-echo   *                                                                                                *
-echo   *      ██████╗ ███████╗███████╗██╗     ██╗███╗   ██╗███████╗     █████╗ ██╗                      *
-echo   *     ██╔═══██╗██╔════╝██╔════╝██║     ██║████╗  ██║██╔════╝    ██╔══██╗██║                      *
-echo   *     ██║   ██║█████╗  █████╗  ██║     ██║██╔██╗ ██║█████╗      ███████║██║                      *
-echo   *     ██║   ██║██╔══╝  ██╔══╝  ██║     ██║██║╚██╗██║██╔══╝      ██╔══██║██║                      *
-echo   *     ╚██████╔╝██║     ██║     ███████╗██║██║ ╚████║███████╗    ██║  ██║██║                      *
-echo   *      ╚═════╝ ╚═╝     ╚═╝     ╚══════╝╚═╝╚═╝  ╚═══╝╚══════╝    ╚═╝  ╚═╝╚═╝                      *
-echo   *                                                                                                *
-echo   *                                 A Modern Local AI Chat Experience                              *
-echo   *                                                                                                *
-echo   ==================================================================================================
-echo   *                           Developed and Designed by: Hemanth Kumar K                           *
-echo   ==================================================================================================
+echo   [Offline AI] Starting local server environment...
 echo.
-echo   [SYSTEM] Initializing Offline AI Server...
-echo.
-echo   [*] Cleaning up old server instances (Port 3000)...
+
+echo   ^> Cleaning up previous sessions...
 for /f "tokens=5" %%a in ('netstat -aon ^| find ":3000"') do taskkill /f /pid %%a >nul 2>&1
-echo   [*] Port 3000 is clean and available.
-echo.
-echo   [*] Booting local backend and Vite frontend...
-echo   [*] Please wait until you see "Server running at http://localhost:3000"
-echo.
-echo   ==================================================================================================
-echo   [INFO] Keep this terminal open! It will display model loading status and generation logs.
-echo   [INFO] To shut down the server, simply close this window or run "Kill All Servers.bat".
-echo   ==================================================================================================
-echo.
 
-:: Start Chrome asynchronously after 4 seconds
-start "" /b cmd /c "timeout /t 4 /nobreak >nul & start chrome http://localhost:3000"
+echo   ^> Starting backend and frontend services...
+echo Set WshShell = CreateObject("WScript.Shell") > "%temp%\hidden_start.vbs"
+echo WshShell.Run "cmd.exe /c npm run start", 0, False >> "%temp%\hidden_start.vbs"
+wscript "%temp%\hidden_start.vbs"
 
-:: Start the actual server and stream its logs directly into this terminal
-call npm run start
+echo   ^> Waiting for server to become ready (this may take a few seconds)...
+:WAIT_LOOP
+powershell -Command "try { $response = Invoke-WebRequest -Uri http://localhost:3000 -UseBasicParsing -ErrorAction Stop; if ($response.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    timeout /t 1 /nobreak >nul
+    goto WAIT_LOOP
+)
+
+echo   ^> Server is fully loaded and ready!
+echo.
+echo   Opening interface in browser in...
+echo   3
+timeout /t 1 /nobreak >nul
+echo   2
+timeout /t 1 /nobreak >nul
+echo   1
+timeout /t 1 /nobreak >nul
+
+echo   Launching!
+start chrome http://localhost:3000
+
+:: Let the terminal close automatically so it's clean and simple
+exit
