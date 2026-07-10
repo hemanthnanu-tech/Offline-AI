@@ -518,6 +518,21 @@ async function startServer() {
 
   const HOST = process.env.HOST || '127.0.0.1';
   app.listen(PORT, HOST, () => {
+  console.clear();
+  console.log('\x1b[36m%s\x1b[0m', '=======================================================');
+  console.log('\x1b[36m%s\x1b[0m', '      ███████╗ ██████╗ ██████╗ ██████╗ ███████╗       ');
+  console.log('\x1b[36m%s\x1b[0m', '      ██╔════╝██╔═══██╗██╔══██╗██╔══██╗██╔════╝       ');
+  console.log('\x1b[36m%s\x1b[0m', '      █████╗  ██║   ██║██████╔╝██████╔╝█████╗         ');
+  console.log('\x1b[36m%s\x1b[0m', '      ██╔══╝  ██║   ██║██╔══██╗██╔══██╗██╔══╝         ');
+  console.log('\x1b[36m%s\x1b[0m', '      ██║     ╚██████╔╝██║  ██║██║  ██║███████╗       ');
+  console.log('\x1b[36m%s\x1b[0m', '      ╚═╝      ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝       ');
+  console.log('\x1b[36m%s\x1b[0m', '=======================================================');
+  console.log('\x1b[35m%s\x1b[0m', '           O F F L I N E   A I   S Y S T E M           ');
+  console.log('\x1b[36m%s\x1b[0m', '=======================================================');
+  console.log('\x1b[33m%s\x1b[0m', '              Created by: Hemanth Kumar K              ');
+  console.log('\x1b[36m%s\x1b[0m', '=======================================================');
+  console.log('');
+
     console.log(`Server is booted and actively running on http://${HOST}:${PORT}`);
   });
 }
