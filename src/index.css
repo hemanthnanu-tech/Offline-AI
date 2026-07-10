@@ -40,8 +40,6 @@
   --modal-sidebar-bg: #0d0d0d;
   --user-bubble-bg: var(--accent);
   --user-bubble-text: var(--accent-fg);
-  --accent: #818cf8;
-  --accent-hover: #6366f1;
 }
 
 body {
