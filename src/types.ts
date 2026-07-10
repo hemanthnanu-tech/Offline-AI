@@ -54,6 +54,7 @@ export interface ChatSession {
 export type InferenceEngine = 'local-webgpu' | 'server-assisted';
 
 export interface ModelPreset {
+  icon?: any;
   category?: string;
   prompt?: string;
   description?: string;

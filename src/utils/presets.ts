@@ -1,6 +1,4 @@
-import { ModelPreset } from '../types';
-
-export const MODEL_PRESETS: ModelPreset[] = [
+export const MODEL_PRESETS: any[] = [
   // CODING
   {
     id: 'code_refactor',

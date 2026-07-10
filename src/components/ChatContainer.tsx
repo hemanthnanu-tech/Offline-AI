@@ -121,6 +121,8 @@ export default function ChatContainer({
   const [isListening, setIsListening] = useState(false);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [selection, setSelection] = useState<{ text: string; x: number; y: number } | null>(null);
+  const [showAttachDropdown, setShowAttachDropdown] = useState(false);
+  const attachDropdownRef = useRef<HTMLDivElement>(null);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -419,7 +421,7 @@ export default function ChatContainer({
   }, [messages.length]);
 
   const processFiles = async (files: File[]) => {
-    const isVisionCapable = activeVisionModel || (activeModel && (activeModel.fileName.toLowerCase().includes('vision') || activeModel.fileName.toLowerCase().includes('llava')));
+    const isVisionCapable = !!activeVisionModel;
     
     for (const file of files) {
       if (file.type.startsWith('image/')) {
@@ -1065,17 +1067,63 @@ export default function ChatContainer({
                 width:'100%',
               }}
             >
-              {/* + attach — Fix 2: vision model guard */}
-              <button
-                type="button"
-                onClick={() => {
-                  fileInputRef.current?.click();
-                }}
-                style={{background:'none', border:'none', cursor:'pointer', padding:'4px', marginRight:'8px', color:'var(--text-main)', display:'flex', alignItems:'center', flexShrink:0}}
-                title="Attach File or Image"
-              >
-                <Plus style={{width:'20px', height:'20px'}} />
-              </button>
+              
+              {/* + attach */}
+              <div className="relative" ref={attachDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowAttachDropdown(!showAttachDropdown)}
+                  style={{background:'none', border:'none', cursor:'pointer', padding:'4px', marginRight:'8px', color:'var(--text-main)', display:'flex', alignItems:'center', flexShrink:0}}
+                  title="Attach File or Image"
+                >
+                  <Plus style={{width:'20px', height:'20px'}} />
+                </button>
+                
+                {showAttachDropdown && (
+                  <div className="absolute bottom-full left-0 mb-2 w-48 bg-[var(--bg-main)] border border-[var(--border-color)] rounded-xl shadow-premium overflow-hidden z-50 flex flex-col p-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (fileInputRef.current) {
+                          fileInputRef.current.accept = 'image/*';
+                          fileInputRef.current.click();
+                        }
+                        setShowAttachDropdown(false);
+                      }}
+                      className="text-left px-3 py-2 text-sm text-[var(--text-main)] hover:bg-[var(--bg-hover)] rounded-lg flex items-center gap-2.5 transition-colors"
+                    >
+                      <ImageIcon className="w-4 h-4 text-blue-500" /> Image
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (fileInputRef.current) {
+                          fileInputRef.current.accept = '.pdf,application/pdf';
+                          fileInputRef.current.click();
+                        }
+                        setShowAttachDropdown(false);
+                      }}
+                      className="text-left px-3 py-2 text-sm text-[var(--text-main)] hover:bg-[var(--bg-hover)] rounded-lg flex items-center gap-2.5 transition-colors"
+                    >
+                      <BookOpen className="w-4 h-4 text-emerald-500" /> PDF Document
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (fileInputRef.current) {
+                          fileInputRef.current.accept = '.md,.txt,.csv,.json,.log,.ts,.js,.tsx,.jsx,.html,.css';
+                          fileInputRef.current.click();
+                        }
+                        setShowAttachDropdown(false);
+                      }}
+                      className="text-left px-3 py-2 text-sm text-[var(--text-main)] hover:bg-[var(--bg-hover)] rounded-lg flex items-center gap-2.5 transition-colors"
+                    >
+                      <Code className="w-4 h-4 text-amber-500" /> Text / Code
+                    </button>
+                  </div>
+                )}
+              </div>
+
 
               {/* Text input */}
               <textarea
