@@ -370,6 +370,11 @@ export default function App() {
 
   const executeInference = async (sessionId: string, updatedMessages: ChatMessage[], images?: string[]) => {
     setGenerating(true);
+    let watchdogTimer = setTimeout(() => {
+        setGenerating(false);
+        console.warn("Watchdog: Inference timed out. Resetting generating state.");
+    }, 180000); // 3-minute max global timeout safety catch
+    
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -442,6 +447,14 @@ export default function App() {
         let wasReasoning = false;
 
         while (reader) {
+          
+          clearTimeout(watchdogTimer);
+          watchdogTimer = setTimeout(() => {
+              setGenerating(false);
+              console.warn("Watchdog: Stream hung. Resetting generating state.");
+              if (abortControllerRef.current) abortControllerRef.current.abort();
+          }, 60000); // 60-second chunk timeout
+          
           const { done, value } = await reader.read();
           if (done) break;
           
@@ -580,6 +593,7 @@ export default function App() {
         return s;
       }));
     } finally {
+      clearTimeout(watchdogTimer);
       setGenerating(false);
       abortControllerRef.current = null;
     }
