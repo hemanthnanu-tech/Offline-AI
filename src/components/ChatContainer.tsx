@@ -30,7 +30,16 @@ const CodeBlock = ({ inline, className, children, generating, ...props }: any) =
           <button
             type="button"
             onClick={() => {
-              navigator.clipboard.writeText(codeString);
+              if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(codeString);
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = codeString;
+      document.body.appendChild(textArea);
+      textArea.select();
+      try { document.execCommand('copy'); } catch (err) {}
+      document.body.removeChild(textArea);
+    }
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             }}
@@ -359,6 +368,7 @@ export default function ChatContainer({
     setInputText(e.target.value);
     e.target.style.height = 'auto';
     e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+    if (e.target.value === "") e.target.style.height = "auto";
   }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -993,7 +1003,16 @@ export default function ChatContainer({
                           <button
                             type="button"
                             onClick={(e) => {
+                              if (navigator.clipboard && window.isSecureContext) {
                               navigator.clipboard.writeText(msg.content);
+                            } else {
+                              const textArea = document.createElement("textarea");
+                              textArea.value = msg.content;
+                              document.body.appendChild(textArea);
+                              textArea.select();
+                              try { document.execCommand('copy'); } catch (err) {}
+                              document.body.removeChild(textArea);
+                            }
                               setCopiedText(msg.content);
                               setTimeout(() => setCopiedText(null), 2000);
                             }}
@@ -1286,7 +1305,7 @@ export default function ChatContainer({
               {inputText.length > 0 && (
                 <div className="flex flex-col text-[10px] text-[var(--text-muted)] px-2 shrink-0 text-right leading-tight">
                   <span className="font-medium text-[var(--accent)]">{inputText.length} chars</span>
-                  <span className="opacity-70">~{Math.ceil(inputText.length / 4)} tokens</span>
+                  <span className="opacity-70">~{Math.ceil((inputText || "").length / 3.5)} tokens</span>
                 </div>
               )}
 
@@ -1304,7 +1323,7 @@ export default function ChatContainer({
               <button
                 type={generating ? 'button' : 'submit'}
                 onClick={generating ? onStopGeneration : undefined}
-                disabled={!inputText.trim() && selectedImages.length === 0 && !generating && !isListening}
+                disabled={(!inputText.trim() && selectedImages.length === 0 && !isListening) || generating}
                 style={{
                   width:'40px', height:'40px', borderRadius:'50%',
                   background: generating ? '#ef4444' : (!inputText.trim() && selectedImages.length === 0 && !isListening) ? 'var(--border-color)' : 'var(--accent)',

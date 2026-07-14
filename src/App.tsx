@@ -17,7 +17,7 @@ export default function App() {
   // Heartbeat system to keep the background server alive
     useEffect(() => {
     const sendHeartbeat = () => {
-      fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+      fetch('/api/heartbeat', { method: 'POST' }).catch(err => console.debug('Heartbeat failed', err));
     };
     sendHeartbeat(); // initial ping
     const interval = setInterval(sendHeartbeat, 5000);
@@ -331,7 +331,7 @@ export default function App() {
         // Enforce quota limit (keep last 50 chats max)
         const cappedSessions = sessions.slice(0, 50);
         try {
-          localStorage.setItem('gguf-chat-sessions', JSON.stringify(cappedSessions));
+          try { localStorage.setItem('gguf-chat-sessions', JSON.stringify(cappedSessions)); } catch (e) { console.error('Storage quota exceeded'); localStorage.setItem('gguf-chat-sessions', JSON.stringify(sessions.slice(0, 10))); }
         } catch (e) {
           console.warn("Storage quota exceeded, clearing old chats.", e);
           const ultraCapped = sessions.slice(0, 10);

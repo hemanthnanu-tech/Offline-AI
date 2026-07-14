@@ -62,7 +62,7 @@ export default function Sidebar({
 
   // Filter threads and placeholders based on search input
   const filteredSessions = sessions.filter(s => 
-    s.title.toLowerCase().includes(searchQuery.toLowerCase())
+    (s.title || "").toLowerCase().includes((searchQuery || "").toLowerCase())
   );
 
   const filteredPlaceholders = PLACEHOLDER_RECENTS.filter(title => 
@@ -207,7 +207,7 @@ export default function Sidebar({
                                   label: 'Delete',
                                   icon: Trash2,
                                   danger: true,
-                                  onClick: () => onDeleteSession(session.id)
+                                  onClick: (e) => { e?.stopPropagation?.(); onDeleteSession(session.id); }
                                 }
                               ]}
                             >

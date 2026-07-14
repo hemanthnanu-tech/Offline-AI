@@ -8,7 +8,7 @@ export interface ContextMenuItem {
   label: string;
   icon?: LucideIcon;
   danger?: boolean;
-  onClick: () => void;
+  onClick: (e?: any) => void;
 }
 
 interface ContextMenuProps {
