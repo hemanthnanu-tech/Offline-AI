@@ -140,22 +140,13 @@ export default function Sidebar({
 
           <div className="space-y-0.5 pr-0.5">
             {sessions.length === 0 ? (
-              filteredPlaceholders.length === 0 ? (
-                <div className="text-[10.5px] text-[var(--text-muted)] p-3 italic text-center">
-                  No chats match search.
+                <div className="space-y-2 mt-2 px-2">
+                  <div className="h-8 bg-[var(--bg-hover)]/50 rounded-md animate-pulse"></div>
+                  <div className="h-8 bg-[var(--bg-hover)]/50 rounded-md animate-pulse"></div>
+                  <div className="h-8 bg-[var(--bg-hover)]/30 rounded-md animate-pulse"></div>
+                  <div className="h-8 bg-[var(--bg-hover)]/20 rounded-md animate-pulse"></div>
+                  <div className="h-8 bg-[var(--bg-hover)]/10 rounded-md animate-pulse"></div>
                 </div>
-              ) : (
-                filteredPlaceholders.map((title, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={onNewSession}
-                    className="w-full sidebar-item justify-start py-2.5 hover:bg-[var(--bg-hover)] text-[var(--text-main)] font-normal truncate active:scale-[0.99] transition-transform"
-                  >
-                    <span className="truncate">{title}</span>
-                  </button>
-                ))
-              )
             ) : (
               filteredSessions.length === 0 ? (
                 <div className="text-[10.5px] text-[var(--text-muted)] p-3 italic text-center">
@@ -248,6 +239,9 @@ export default function Sidebar({
           <div className="text-left leading-tight min-w-0">
             <div className="text-[var(--text-main)] font-semibold text-[13px] truncate">
               {settings?.userName || 'Offline User'}
+            </div>
+            <div className="text-[9px] text-[var(--accent)] font-bold tracking-widest uppercase mt-0.5 opacity-80">
+              v1.0.0 Stable
             </div>
           </div>
         </div>

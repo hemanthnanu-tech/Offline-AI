@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import ChatContainer from './components/ChatContainer';
 import SettingsModal from './components/SettingsModal';
 import LibraryModal from './components/LibraryModal';
+import toast from 'react-hot-toast';
 import { ChatSession, ChatMessage, InferenceSettings, GGUFModelInfo } from './types';
 import {  Terminal, Database, HelpCircle, LayoutGrid, Eye, EyeOff, Loader2, Globe, DownloadCloud, ChevronDown, ChevronUp, Square, Cpu, HardDrive, AlertCircle , X } from 'lucide-react';
 
@@ -14,7 +15,7 @@ export default function App() {
   const [activeVisionModel, setActiveVisionModel] = useState<GGUFModelInfo | null>(null);
   
   // Heartbeat system to keep the background server alive
-  useEffect(() => {
+    useEffect(() => {
     const sendHeartbeat = () => {
       fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
     };
@@ -738,6 +739,16 @@ export default function App() {
     }
   }, [sessions, activeSessionId, generating, executeInference]);
 
+    const clearCurrentChat = useCallback(() => {
+    setSessions(prev => prev.map(s => {
+      if (s.id === activeSessionId) {
+        return { ...s, messages: [] };
+      }
+      return s;
+    }));
+    toast.success('Chat cleared');
+  }, [activeSessionId]);
+
   const clearAllChats = useCallback(() => {
     if (confirm("Are you sure you want to delete ALL chat sessions? This action cannot be undone.")) {
       setSessions([]);
@@ -914,6 +925,7 @@ export default function App() {
               availableModels={availableModels}
               onLoadModel={handleLoadModel}
               onDeleteMessage={handleDeleteMessage}
+              onClearCurrentChat={clearCurrentChat}
               onUnloadModel={() => {
                 setActiveModel(null);
                 setActiveVisionModel(null);

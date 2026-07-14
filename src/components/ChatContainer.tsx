@@ -14,6 +14,7 @@ import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 import { ChatMessage, InferenceSettings, GGUFModelInfo } from '../types';
 import { PromptItem, PREADDED_PROMPTS } from './LibraryModal';
+import { EmptyState } from './EmptyState';
 
 const CodeBlock = ({ inline, className, children, generating, ...props }: any) => {
   const [copied, setCopied] = useState(false);
@@ -96,6 +97,7 @@ interface ChatContainerProps {
   onLoadModel: (fileName: string) => void;
   onDeleteMessage?: (id: string) => void;
   onUnloadModel?: () => void;
+  onClearCurrentChat?: () => void;
 }
 
 export default function ChatContainer({
