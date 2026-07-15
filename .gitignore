@@ -12,3 +12,6 @@ models/
 llama-bin/
 llama-server.exe
 *.mp4
+
+# Portable Node.js runtime (downloaded locally via "Setup - Download Runtime.bat")
+runtime/
